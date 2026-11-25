@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f5ed">
+  <meta name="description" content="Move a GPS pin without moving the phone. An interactive experiment in how GPS finds position and fixes its own clock.">
+  <title>One Microsecond · A GPS experiment</title>
+  <link rel="icon" href="mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="app.mjs"></script>
+</head>
+<body>
+  <header class="masthead">
+    <div class="wrap mast-inner">
+      <a class="brand" href="./"><img src="mark.svg" width="28" height="28" alt=""> One Microsecond</a>
+      <nav aria-label="Sections"><a href="#experiment">Experiment</a><a href="#inside">Inside the fix</a></nav>
+    </div>
+  </header>
+  <main class="wrap">
+    <div class="hero">
+      <div>
+        <p class="eyebrow"><span class="cross">+</span> GPS RECEIVER EXPERIMENT</p>
+        <h1>One microsecond off.</h1>
+      </div>
+      <p class="intro">Move a GPS pin without moving the phone. Change its clock, then see how the receiver finds <strong>both its position and the right time.</strong></p>
+    </div>
+
+    <noscript><p>This GPS experiment needs JavaScript to calculate the fix in your browser.</p></noscript>
+    <section id="experiment" class="bench" aria-label="Interactive GPS experiment">
+      <div class="controls">
+        <div class="control-top"><span class="eyebrow">RECEIVER CONTROLS</span><button class="text-button" id="reset" type="button">Reset</button></div>
+        <div class="control-main">
+          <label for="offset">Phone clock error</label>
+          <output id="offset-value" for="offset">+1.00 <small>µs</small></output>
+          <input id="offset" type="range" min="-4" max="4" step="0.05" value="1" aria-describedby="range-note">
+          <div class="range-ends" aria-hidden="true"><span>−4 µs</span><span>0</span><span>+4 µs</span></div>
+          <p class="range-note" id="range-note">Each signal looks <strong>300 m longer.</strong></p>
+        </div>
+        <div class="solve-controls">
+          <button class="primary" id="clock" type="button">Solve for the clock</button>
+          <p class="hint" id="hint" aria-live="polite">The receiver assumes its clock is perfect. Try solving for the clock.</p>
+        </div>
+      </div>
+      <div class="instrument">
+        <div class="instrument-top"><span class="eyebrow"><span class="status-dot"></span> SIMULATED RECEIVER</span><span class="status-chip" id="status">CLOCK ASSUMED EXACT</span></div>
+        <div class="instrument-panels">
+          <section class="sky-section" aria-labelledby="sky-heading">
+            <div class="figure-caption"><h2 id="sky-heading">Satellite sky</h2><output id="signal-count">4 signals</output></div>
+            <div class="sky">
+              <canvas id="sky-grid" aria-hidden="true"></canvas>
+              <div id="satellites" aria-label="Toggle satellite signals"></div>
+            </div>
+            <p class="figure-note">Tap a satellite to cut or restore its signal.</p>
+          </section>
+          <section class="map-section" aria-labelledby="map-heading">
+            <div class="figure-caption"><h2 id="map-heading">Ground view</h2><span id="map-error">—</span></div>
+            <canvas id="ground" aria-hidden="true"></canvas>
+            <div class="legend"><span><i class="key truth-key"></i> Actual phone</span><span><i class="key estimate-key"></i> GPS estimate</span></div>
+            <p class="visually-hidden" id="map-description" aria-live="polite"></p>
+          </section>
+        </div>
+        <div class="instrument-readout">
+          <div><span>Clock estimate</span><output id="estimated-clock">0.00 µs <small>assumed</small></output></div>
+          <div><span>Height error</span><output id="height-error">—</output></div>
+          <div><span>Signal mismatch</span><output id="mismatch">—</output></div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="takeaway">
+      <div class="stamp" aria-hidden="true"><span></span></div>
+      <p><strong>GPS turns travel time into distance.</strong> In one microsecond, a radio signal travels about 300 metres. A fast phone clock adds the same extra distance to every reading. A fourth well-placed satellite gives the receiver another measurement to solve for that shared error.</p>
+    </aside>
+
+    <section class="depth" id="inside" aria-labelledby="inside-title">
+      <p class="eyebrow"><span class="cross">+</span> INSIDE THE FIX</p>
+      <div class="section-heading"><h2 id="inside-title">Make the signals disagree.</h2><p>Change what the receiver hears. Then read what it can work out from those signals.</p></div>
+      <div class="depth-grid">
+        <div class="trial">
+          <h3>Cut the fourth signal</h3>
+          <p>With three readings and four unknowns, the receiver can’t separate position from time.</p>
+          <button class="outline" id="trial-four" type="button">Try with three signals</button>
+        </div>
+        <div class="trial">
+          <h3>Crowd the sky</h3>
+          <p>Keep the same count. Move the satellites closer together and compare how much range errors carry into the fix.</p>
+          <fieldset class="sky-choice"><legend class="visually-hidden">Satellite arrangement</legend>
+          <label><input type="radio" name="layout" value="open" checked><span>Spread out</span></label>
+          <label><input type="radio" name="layout" value="cluster"><span>Crowded</span></label></fieldset>
+          <div class="dop"><strong id="dop-value">—</strong> <abbr title="Horizontal dilution of precision">HDOP</abbr> <span id="dop-caption"></span></div>
+          <label class="echo-slider">Range noise <output id="noise-value" for="noise">0 m</output>
+            <input id="noise" type="range" min="0" max="20" step="1" value="0">
+          </label>
+          <p class="trial-result" id="noise-result" hidden></p>
+        </div>
+        <div class="trial">
+          <h3>Bounce one signal</h3>
+          <p>Add a delayed sixth signal, like a reflection off a building. The receiver now has spare readings to expose disagreement.</p>
+          <button class="outline" id="trial-echo" type="button">Add a 40 m echo</button>
+          <label class="echo-slider" id="echo-control" hidden>Extra path on S6 <output id="echo-value" for="echo">40 m</output>
+            <input id="echo" type="range" min="0" max="100" step="1" value="40">
+          </label>
+        </div>
+      </div>
+
+      <div class="ledger">
+        <div class="ledger-title">
+          <div><h3>The measurements</h3><p>Measured travel time × speed of light = <strong>pseudorange</strong>, the distance the phone’s clock suggests.</p></div>
+          <a href="#experiment">Back to receiver</a>
+        </div>
+        <div class="table-scroll" tabindex="0" role="region" aria-label="Satellite measurements">
+          <table>
+            <thead><tr><th scope="col">Signal</th><th scope="col">True distance</th><th scope="col">Measured time</th><th scope="col">Pseudorange</th><th scope="col">Fit residual</th></tr></thead>
+            <tbody id="measurements"></tbody>
+          </table>
+        </div>
+        <details>
+          <summary>Show the receiver’s calculations</summary>
+          <div class="calculation">
+            <p>Each signal gives <code>pseudorange = distance to satellite + clock bias</code>. The receiver begins at the survey origin with zero clock bias. It predicts the ranges, finds the change that best reduces the squared residuals, then repeats. The table shows the guesses after each update.</p>
+            <div class="table-scroll" tabindex="0" role="region" aria-label="Solver iterations">
+              <table><thead><tr><th scope="col">Update</th><th scope="col">East</th><th scope="col">North</th><th scope="col">Up</th><th scope="col">Clock error</th></tr></thead><tbody id="iterations"></tbody></table>
+            </div>
+            <p>Fit residual = measured range minus predicted range. Horizontal dilution of precision (HDOP) is the horizontal uncertainty per metre of independent range noise in this model.</p>
+          </div>
+        </details>
+        <details>
+          <summary>What this model simplifies</summary>
+          <div class="calculation"><p>One simulated instant, with fixed satellite positions at GPS orbital altitude and a phone that stays in the same place. The receiver uses straight-line distances in three dimensions. The ground view is an invented local map. The clock offset is shared across measurements and the echo adds extra path to one signal. The simulation omits atmospheric delays, satellite-clock corrections and Earth rotation during signal flight.</p>
+          <p><a href="https://gnss-sdr.org/docs/sp-blocks/observables/">GNSS-SDR on pseudorange</a> · <a href="https://gnss-sdr.org/docs/sp-blocks/pvt/">GNSS-SDR on estimating position and time</a></p></div>
+        </details>
+      </div>
+    </section>
+  </main>
+  <footer class="wrap footer"><a class="brand" href="./"><img src="mark.svg" width="25" height="25" alt=""> One Microsecond</a><span>An interactive GPS experiment</span></footer>
+</body>
+</html>
