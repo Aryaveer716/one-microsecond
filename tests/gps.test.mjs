@@ -50,11 +50,20 @@ test('clustered satellites amplify uncertainty with the same number of signals',
   assert.ok(distance(clustered.position, truth) < 1e-5)
 })
 
-test('a delayed fifth signal produces a compromised fix and nonzero residual', () => {
+test('a delayed sixth signal produces a compromised fit with all six signals', () => {
   const open = makeSky('open')
   const clean = solve(measure(open, truth, 1), true)
-  const echo = solve(measure(open, truth, 1, { s5: 40 }), true)
+  const echo = solve(measure(open, truth, 1, { s6: 40 }), true)
   assert.ok(clean.rms < 1e-6)
   assert.ok(echo.rms > 1)
   assert.ok(distance(echo.position, truth) > 2)
+})
+
+test('a biased range can fit the wrong position exactly when there are only four readings', () => {
+  const open = makeSky('open')
+  const four = [open[0], open[1], open[2], open[5]]
+  const result = solve(measure(four, truth, 1, { s6: 40 }), true)
+  assert.equal(result.status, 'fixed')
+  assert.ok(result.rms < 1e-6)
+  assert.ok(distance(result.position, truth) > 10)
 })

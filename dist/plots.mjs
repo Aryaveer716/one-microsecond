@@ -109,16 +109,18 @@ function paintMap(ctx, width, height, project, halfEast, halfNorth, step) {
   ctx.fillRect(0, 0, width, height)
   // Draw an invented waterfront, parks and street blocks in local metres.
   const mapPath = points => points.map(([east, north]) => project(east, north))
-  if (halfEast < 2800 && halfNorth < 2800) for (let east = -Math.ceil(halfEast / 120) * 120; east <= halfEast; east += 120) {
-    for (let north = -Math.ceil(halfNorth / 90) * 90; north <= halfNorth; north += 90) {
-      const waterfront = 155 + .31 * north + 20 * Math.sin(north / 90)
-      if (east + 105 > waterfront) continue
-      const [x, y] = project(east + 7, north + 80)
-      const [x2, y2] = project(east + 106, north + 9)
-      ctx.fillStyle = (east / 120 + north / 90) % 3 === 0 ? '#334e3a' : '#2e493d'
-      ctx.fillRect(x, y, x2 - x, y2 - y)
-      ctx.strokeStyle = '#3a5549'
-      ctx.strokeRect(x, y, x2 - x, y2 - y)
+  if (halfEast < 2800 && halfNorth < 2800) {
+    for (let east = -Math.ceil(halfEast / 120) * 120; east <= halfEast; east += 120) {
+      for (let north = -Math.ceil(halfNorth / 90) * 90; north <= halfNorth; north += 90) {
+        const waterfront = 155 + .31 * north + 20 * Math.sin(north / 90)
+        if (east + 105 > waterfront) continue
+        const [x, y] = project(east + 7, north + 80)
+        const [x2, y2] = project(east + 106, north + 9)
+        ctx.fillStyle = (east / 120 + north / 90) % 3 === 0 ? '#334e3a' : '#2e493d'
+        ctx.fillRect(x, y, x2 - x, y2 - y)
+        ctx.strokeStyle = '#3a5549'
+        ctx.strokeRect(x, y, x2 - x, y2 - y)
+      }
     }
   }
 

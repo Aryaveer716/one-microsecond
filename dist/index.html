@@ -96,11 +96,12 @@
         </div>
         <div class="trial">
           <h3>Bounce one signal</h3>
-          <p>Add a delayed sixth signal, like a reflection off a building. The receiver now has spare readings to expose disagreement.</p>
+          <p>Use six signals and add a delay to S6, like a reflection off a building. Clear the delay to compare the same six paths.</p>
           <button class="outline" id="trial-echo" type="button">Add a 40 m echo</button>
           <label class="echo-slider" id="echo-control" hidden>Extra path on S6 <output id="echo-value" for="echo">40 m</output>
-            <input id="echo" type="range" min="0" max="100" step="1" value="40">
+            <input id="echo" type="range" min="0" max="100" step="1" value="0">
           </label>
+          <p class="trial-result" id="echo-result" hidden></p>
         </div>
       </div>
 

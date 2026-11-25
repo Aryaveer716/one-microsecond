@@ -2,7 +2,7 @@
 
 Move a GPS pin without moving the phone. A one-microsecond error in the receiver clock adds about 300 metres to every measured range. One Microsecond lets you turn that error up, turn the receiver’s clock estimate off, and see what happens to a position fix.
 
-[Open the experiment](https://aryaveer716.github.io/one-microsecond/) · [Round 1 project page](submission.md)
+[Open the experiment](https://aryaveer716.github.io/one-microsecond/) · [Round 1 project page](submission.md) · [Captioned demo](https://github.com/Aryaveer716/one-microsecond/releases/download/round-1/one-microsecond-demo.mp4)
 
 ## Try it
 

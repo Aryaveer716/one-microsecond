@@ -28,6 +28,8 @@ The simulator turns straight-line satellite distances into travel times, then ad
 
 The phone’s location depends on measuring time accurately enough that a millionth of a second matters. The receiver can work around an imperfect clock by estimating the error from the signals it already has. The experiment also shows why counting satellites alone tells you so little, and why a clean-looking fit can still be wrong.
 
+[Live experiment](https://aryaveer716.github.io/one-microsecond/) · [Public source](https://github.com/Aryaveer716/one-microsecond) · [Demo video](https://github.com/Aryaveer716/one-microsecond/releases/download/round-1/one-microsecond-demo.mp4)
+
 ## Interview prep
 
 Each team member should be able to demo the loop cold and trace one path through the code. Use the actual contributions your team made when discussing authorship.

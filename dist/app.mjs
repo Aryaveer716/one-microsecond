@@ -70,7 +70,8 @@ function describeFix(result, horizontalError) {
 
 function describeAction(result, count, horizontalError) {
   if (result.status === 'insufficient') {
-    return `${count} signals for ${result.size} unknowns. Tap a satellite to restore a signal.`
+    const unknowns = state.fitClock ? 'east, north, height and time' : 'east, north and height'
+    return `${count} signals for ${unknowns}. Tap a satellite to restore a signal.`
   }
   if (result.status !== 'fixed') return 'Try spreading the satellites out or adding a signal.'
   if (!state.fitClock) return 'The receiver assumes its clock is perfect. Try solving for the clock.'
@@ -144,8 +145,7 @@ function render(animate = false) {
     button.dataset.delayed = id === 's6' && state.echo > 0
   })
 
-  const three = state.fitClock && active.length === 3 && firstFour.slice(0, 3).every(id => state.enabled.has(id))
-  setText('trial-four', three ? 'Restore the fourth signal' : 'Try with three signals')
+  setText('trial-four', isThreeSignalTrial() ? 'Restore the fourth signal' : 'Try with three signals')
   document.querySelector(`input[name="layout"][value="${state.layout}"]`).checked = true
   setText('dop-value', fixed ? result.hdop.toFixed(2) : '—')
   setText('dop-caption', fixed ? 'Higher means noisier positions.' : 'A fix is needed to measure this.')
@@ -153,11 +153,13 @@ function render(animate = false) {
   setText('noise-value', state.noise + ' m')
   $('noise-result').hidden = state.noise === 0 || !fixed
   setText('noise-result', fixed ? `This fix is ${format.format(horizontalError)} m off on the ground.` : '')
-  const echoActive = state.enabled.has('s6')
-  setText('trial-echo', echoActive ? 'Remove the extra signal' : 'Add a 40 m echo')
-  $('echo-control').hidden = !echoActive
+  const sixthSignalEnabled = state.enabled.has('s6')
+  setText('trial-echo', sixthSignalEnabled && state.echo > 0 ? 'Clear the echo' : 'Add a 40 m echo')
+  $('echo-control').hidden = !sixthSignalEnabled
   $('echo').value = state.echo
   setText('echo-value', state.echo + ' m')
+  $('echo-result').hidden = !sixthSignalEnabled
+  setText('echo-result', fixed ? `${error} · ${result.rms.toFixed(1)} m signal mismatch` : 'Restore the fix to see signal mismatch.')
 
   renderLedger(all, active, result)
   drawSky(skyCanvas, satellites, buttons, state.enabled)
@@ -180,14 +182,19 @@ $('reset').addEventListener('click', () => {
   state = defaultState()
   render(true)
 })
+function isThreeSignalTrial() {
+  return state.fitClock && state.enabled.size === 3 && firstFour.slice(0, 3).every(id => state.enabled.has(id))
+}
+
 $('trial-four').addEventListener('click', () => {
-  const restore = $('trial-four').textContent === 'Restore the fourth signal'
+  const restore = isThreeSignalTrial()
   state.fitClock = true
   state.enabled = new Set(restore ? firstFour : firstFour.slice(0, 3))
   state.echo = 0
   state.noise = 0
   render()
   $('experiment').scrollIntoView()
+  buttons.get('s4').focus({ preventScroll: true })
 })
 document.querySelectorAll('input[name="layout"]').forEach(input => input.addEventListener('change', () => {
   state.layout = input.value
@@ -200,8 +207,7 @@ $('noise').addEventListener('input', event => {
   render()
 })
 $('trial-echo').addEventListener('click', () => {
-  if (state.enabled.has('s6')) {
-    state.enabled.delete('s6')
+  if (state.enabled.has('s6') && state.echo > 0) {
     state.echo = 0
   } else {
     state.enabled = new Set([...firstFour, 's5', 's6'])
