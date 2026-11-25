@@ -5,7 +5,7 @@ const earthRadius = 6_371_000
 const orbitRadius = earthRadius + 20_200_000
 
 const layouts = {
-  open: [[306, 25], [49, 34], [163, 19], [22, 77], [239, 53], [103, 47]],
+  open: [[292, 21], [57, 62], [168, 22], [230, 58], [239, 53], [103, 47]],
   cluster: [[324, 38], [343, 51], [17, 39], [3, 64], [25, 57], [354, 33]]
 }
 
@@ -118,4 +118,17 @@ export function solve(observations, fitClock) {
     }
   }
   return { status: 'unconverged', size }
+}
+
+// Subtract the guessed shared bias, then fit only the three position coordinates.
+export function solveAtClock(observations, clockUs) {
+  const bias = clockUs * metersPerMicrosecond
+  const ranges = observations.map(reading => ({ ...reading, range: reading.range - bias }))
+  return { ...solve(ranges, false), clockUs }
+}
+
+export function traceClockGuesses(observations, guesses) {
+  if (observations.length !== 3) return []
+  return guesses.map(clockUs => solveAtClock(observations, clockUs))
+    .filter(fix => fix.status === 'fixed')
 }

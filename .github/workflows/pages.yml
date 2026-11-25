@@ -13,6 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - name: Prepare the rendering assets
+        run: |
+          npm ci --ignore-scripts
+          npm run assets
       - name: Verify the receiver
         run: node --test
       - uses: actions/configure-pages@v5

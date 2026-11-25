@@ -1,229 +1,421 @@
-import { makeSky, measure, metersPerMicrosecond, solve } from './gps.mjs'
-import { drawGround, drawSky } from './plots.mjs'
+import { makeSky, measure, metersPerMicrosecond, solve, solveAtClock, traceClockGuesses } from './gps.mjs'
+import { createFallback } from './fallback.mjs'
 
 const $ = id => document.getElementById(id)
-const skyCanvas = $('sky-grid')
-const groundCanvas = $('ground')
-const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)')
 const phone = [135, -70, 18]
 const firstFour = ['s1', 's2', 's3', 's4']
-// Use identical signed errors in both skies for an apples-to-apples trial.
-const noisePattern = [0.5, -0.9, 0.7, -0.3, 0.2, 0.4]
-const format = new Intl.NumberFormat('en', { maximumFractionDigits: 0 })
-const defaultState = () => ({
-  offset: 1, fitClock: false, layout: 'open', echo: 0, noise: 0, enabled: new Set(firstFour)
+const ids = [...firstFour, 's5', 's6']
+const rangeNoise = [.5, -.9, .7, -.3, .2, .4]
+const motion = matchMedia('(prefers-reduced-motion: reduce)')
+const integer = new Intl.NumberFormat('en', { maximumFractionDigits: 0 })
+const fresh = () => ({
+  offset: 1, fitClock: false, layout: 'open', enabled: new Set(firstFour), probe: 25,
+  trailCenter: 0, restoreId: 's4', restored: false, fourthCheck: null, noise: 0, echo: 0
 })
-let state = defaultState()
-let satellites = makeSky(state.layout)
-let target = null
-let displayed = null
-let frame = 0
+
+let state = fresh()
+let mode = 'opening'
+let scene = null
+let model = null
+const fallback = createFallback($('fallback'))
+const displacement = xyz => xyz.map((value, i) => value - phone[i])
+const clockWindow = .86
+const clockGuess = percentage => state.trailCenter + (percentage / 50 - 1) * clockWindow
 
 function signed(value, places = 0) {
-  const rounded = +Math.abs(value).toFixed(places)
-  return (rounded === 0 ? '' : value < 0 ? '−' : '+') + rounded.toFixed(places)
+  const magnitude = Number(Math.abs(value).toFixed(places))
+  return (magnitude === 0 ? '' : value < 0 ? '−' : '+') + magnitude.toFixed(places)
 }
 
-const buttons = new Map(satellites.map(({ id }) => {
+function text(id, value) {
+  const el = $(id)
+  if (el.textContent !== value) el.textContent = value
+}
+
+function satelliteButton(id, parent, cls = '') {
   const button = document.createElement('button')
   button.type = 'button'
-  button.className = 'satellite'
+  button.className = cls
   button.textContent = id.toUpperCase()
-  button.addEventListener('click', () => {
-    if (state.enabled.has(id)) state.enabled.delete(id)
-    else state.enabled.add(id)
-    render(true)
-  })
-  $('satellites').append(button)
-  return [id, button]
-}))
+  button.setAttribute('aria-label', cls ? 'Toggle satellite ' + id.toUpperCase() + ' in scene' : 'Satellite ' + id.toUpperCase())
+  button.addEventListener('click', () => toggleSignal(id))
+  parent.append(button)
+  return button
+}
 
-function setGround(location, animate) {
-  target = location
-  cancelAnimationFrame(frame)
-  if (!animate || !displayed || !location || reducedMotion.matches) {
-    displayed = location
-    drawGround(groundCanvas, displayed)
+const switchButtons = ids.map(id => satelliteButton(id, $('sat-switches')))
+const skyButtons = ids.map(id => satelliteButton(id, $('sky-buttons'), 'sky-button'))
+const tags = { actual: $('actual-tag'), estimate: $('estimate-tag'), probe: $('probe-tag') }
+ids.forEach(id => $('reading-satellite').add(new Option(id.toUpperCase(), id)))
+
+function buildModel() {
+  const sky = makeSky(state.layout)
+  const errors = Object.fromEntries(ids.map((id, i) => [id, state.noise * rangeNoise[i]]))
+  errors.s6 += state.echo
+  const ideal = measure(sky, phone, 0)
+  const observed = measure(sky, phone, state.offset, errors)
+  const active = observed.filter(signal => state.enabled.has(signal.id))
+  const result = solve(active, state.fitClock)
+  const position = result.status === 'fixed' ? displacement(result.position) : null
+  const error = position ? Math.hypot(position[0], position[1]) : null
+  const onTarget = position && error < .5 && Math.abs(position[2]) < .5
+  const trail = active.length === 3 && state.fitClock
+    ? traceClockGuesses(active, Array.from({ length: 41 }, (_, index) => clockGuess(index * 2.5)))
+      .map(fit => ({ ...fit, offset: displacement(fit.position) }))
+    : []
+  return { sky, ideal, observed, active, result, position, error, onTarget, trail }
+}
+
+function sampleTrail() {
+  if (!model.trail.length) {
+    model.sample = null
     return
   }
-  const origin = displayed
-  const extent = origin.map((value, i) => Math.max(Math.abs(value), Math.abs(location[i])))
-  const start = performance.now()
-  function draw(now) {
-    const elapsed = Math.min((now - start) / 440, 1)
-    const t = 1 - (1 - elapsed) ** 3
-    displayed = origin.map((value, i) => value + (location[i] - value) * t)
-    drawGround(groundCanvas, displayed, extent)
-    if (elapsed < 1) frame = requestAnimationFrame(draw)
-    else drawGround(groundCanvas, location)
+  const fit = solveAtClock(model.active, clockGuess(state.probe))
+  model.sample = fit.status === 'fixed' ? { ...fit, offset: displacement(fit.position) } : model.trail[0]
+}
+
+function setLayoutVisibility() {
+  document.body.dataset.mode = mode
+  const opening = mode === 'opening'
+  for (const id of ['scene-overlay', 'controls', 'inside', 'replay']) $(id).hidden = opening
+  if (!opening) $('phone-entry').hidden = true
+  fallback.setMode(mode)
+}
+
+function enter(animate = true) {
+  if (mode === 'opening') {
+    mode = 'lab'
+    setLayoutVisibility()
+    scene?.enter(animate)
+    window.scrollTo(0, 0)
   }
-  frame = requestAnimationFrame(draw)
+  $('lesson-title').focus({ preventScroll: true })
 }
 
-function describeFix(result, horizontalError) {
-  if (result.status === 'insufficient') return 'NO FIX · TOO FEW SIGNALS'
-  if (result.status === 'geometry') return 'NO FIX · POOR GEOMETRY'
-  if (result.status === 'unconverged') return 'NO FIX · SOLVER STALLED'
-  if (!state.fitClock) return 'CLOCK ASSUMED EXACT'
-  return result.rms < 0.05 && horizontalError < 0.5 ? 'POSITION AND TIME SOLVED' : 'BEST FIT WITH CLOCK'
-}
-
-function describeAction(result, count, horizontalError) {
-  if (result.status === 'insufficient') {
-    const unknowns = state.fitClock ? 'east, north, height and time' : 'east, north and height'
-    return `${count} signals for ${unknowns}. Tap a satellite to restore a signal.`
+function replay() {
+  if (mode === 'opening') {
+    scene?.replay()
+    return
   }
-  if (result.status !== 'fixed') return 'Try spreading the satellites out or adding a signal.'
-  if (!state.fitClock) return 'The receiver assumes its clock is perfect. Try solving for the clock.'
-  if (state.echo > 0 && state.enabled.has('s6')) {
-    if (count === 4) return 'Four readings can agree on the wrong fix. Add a signal to expose the echo.'
-    return 'The receiver estimates the clock, but the echo still pulls the pin away.'
+  mode = 'opening'
+  setLayoutVisibility()
+  scene?.replay()
+  window.scrollTo(0, 0)
+  $('enter').focus({ preventScroll: true })
+}
+
+function openDetails() {
+  enter(false)
+  $('inside').scrollIntoView({ behavior: motion.matches ? 'instant' : 'smooth', block: 'start' })
+  $('inside-title').focus({ preventScroll: true })
+}
+
+function beforeCut() {
+  const prior = solve(model.active, true)
+  if (prior.status === 'fixed') state.trailCenter = prior.clockUs
+  state.probe = 25
+  state.fitClock = true
+  state.restored = false
+  state.fourthCheck = null
+}
+
+function toggleSignal(id) {
+  state.restored = false
+  state.fourthCheck = null
+  if (state.enabled.has(id)) {
+    if (state.enabled.size === 4) {
+      beforeCut()
+      state.restoreId = id
+    }
+    state.enabled.delete(id)
+  } else {
+    if (model.trail.length > 1 && model.sample && state.enabled.size === 3) {
+      const reading = model.observed[ids.indexOf(id)]
+      const [prediction] = measure([reading], model.sample.position, model.sample.clockUs)
+      state.fourthCheck = { id: id.toUpperCase(), gap: Math.abs(prediction.range - reading.range) }
+      state.restored = true
+    }
+    state.enabled.add(id)
   }
-  if (state.noise > 0) return 'The receiver estimates the clock, but small range errors can still move the pin.'
-  if (horizontalError < 0.5) return 'The estimate is back on the phone. Move the clock again and watch it stay put.'
-  return 'The receiver has found a position and a clock estimate.'
+  update()
 }
 
-function renderLedger(all, active, result) {
-  $('measurements').innerHTML = all.map(({ id, position, range }) => {
-    const index = active.findIndex(item => item.id === id)
-    const distance = Math.hypot(...position.map((value, axis) => value - phone[axis]))
-    const online = index >= 0
-    const residual = online && result.status === 'fixed' ? signed(result.residuals[index], 2) + ' m' : '—'
-    const time = online ? (range / metersPerMicrosecond / 1000).toFixed(6) + ' ms' : '—'
-    const pseudo = online ? format.format(range) + ' m' : '—'
-    return `<tr data-muted="${!online}"><td>${id.toUpperCase()}${online ? '' : ' · off'}</td><td>${format.format(distance)} m</td><td>${time}</td><td>${pseudo}</td><td>${residual}</td></tr>`
-  }).join('')
-  $('iterations').innerHTML = result.status === 'fixed'
-    ? [{ position: [0, 0, 0], clockUs: 0 }, ...result.steps].map(({ position, clockUs }, index) =>
-      `<tr><td>${index === 0 ? 'Start' : index}</td>${position.map(value => `<td>${signed(value, 3)} m</td>`).join('')}<td>${signed(clockUs, 4)} µs</td></tr>`
-    ).join('')
-    : '<tr><td colspan="5">Restore the fix to see the updates.</td></tr>'
-}
-
-function render(animate = false) {
-  satellites = makeSky(state.layout)
-  const errors = Object.fromEntries(satellites.map(({ id }, i) => [id, noisePattern[i] * state.noise]))
-  errors.s6 += state.echo
-  const all = measure(satellites, phone, state.offset, errors)
-  const active = all.filter(item => state.enabled.has(item.id))
-  const result = solve(active, state.fitClock)
+function indicateClock() {
+  const { result, sample, error, trail, active } = model
+  const hasTrail = trail.length > 1
   const fixed = result.status === 'fixed'
-  const displacement = fixed ? result.position.map((value, i) => value - phone[i]) : null
-  const horizontalError = fixed ? Math.hypot(displacement[0], displacement[1]) : null
-  const onTarget = fixed && horizontalError < 0.5
-  const error = fixed ? (onTarget ? '<1 m off' : format.format(horizontalError) + ' m off') : 'No estimate'
+  let headline
+  let copy
+  let action
+  let phase
 
+  if (hasTrail) {
+    phase = 'THREE SIGNALS'
+    headline = 'The dot becomes a trail.'
+    copy = 'Try two spots on the trail. Changing the clock guess changes the possible location, while all three readings still agree.'
+    action = 'Restore the fourth signal'
+  } else if (!fixed) {
+    phase = 'SIGNAL LOSS'
+    headline = 'Too few signals for a fix.'
+    copy = 'GPS needs enough independent readings to work out where the phone is and how far off its clock is.'
+    action = 'Restore four signals'
+  } else if (!state.fitClock) {
+    phase = 'THE CLOCK'
+    headline = 'A fast clock moves the pin.'
+    copy = 'GPS works out distance by timing each signal’s trip. A fast clock makes each trip seem longer. Move the slider to see the pin shift.'
+    action = 'Let GPS solve it'
+  } else {
+    phase = state.restored ? 'FOUR SIGNALS' : 'POSITION AND TIME'
+    headline = state.restored ? 'Back to one position.' : model.onTarget ? 'The pin is back.' : 'GPS found a best fit.'
+    if (state.restored && state.fourthCheck.gap >= .05) {
+      const { id, gap } = state.fourthCheck
+      copy = `Your chosen point missed ${id}’s reading by ${gap < 1 ? gap.toFixed(2) : integer.format(gap)} m. That fourth reading rules it out.`
+    } else if (state.restored) {
+      copy = 'Your chosen point matches the fourth reading too. That extra reading separates it from the other positions on the trail.'
+    } else {
+      copy = 'GPS estimated east, north, height and clock error together. Cut a signal to see what the receiver loses.'
+    }
+    action = active.length === 4 ? 'Cut one satellite' : 'Try with three signals'
+  }
+  text('phase', phase)
+  text('lesson-title', headline)
+  text('lesson-copy', copy)
+  if ($('action').firstChild.textContent.trim() !== action) $('action').firstChild.textContent = action + ' '
+  $('assume-clock').hidden = !state.fitClock || hasTrail || !fixed
+  $('clock-control').hidden = hasTrail
+  $('probe-control').hidden = !hasTrail
   $('offset').value = state.offset
-  $('offset').setAttribute('aria-valuetext', state.offset === 0 ? 'No clock error' :
-    Math.abs(state.offset) + ' microseconds ' + (state.offset < 0 ? 'slow' : 'fast'))
-  $('offset-value').innerHTML = signed(state.offset, 2) + ' <small>µs</small>'
-  $('range-note').innerHTML = state.offset === 0 ? 'Clock adds <strong>0 m</strong> to each signal.' :
-    `Each signal looks <strong>${format.format(Math.abs(state.offset) * metersPerMicrosecond)} m ${state.offset < 0 ? 'shorter' : 'longer'}.</strong>`
-  $('clock').textContent = state.fitClock ? 'Assume a perfect clock' : 'Solve for the clock'
-  $('clock').dataset.fitted = state.fitClock
-  setText('hint', describeAction(result, active.length, horizontalError))
-  setText('status', describeFix(result, horizontalError))
-  $('status').classList.toggle('good', state.fitClock && onTarget && result.rms < 0.05)
-  setText('map-error', error)
-  $('map-error').classList.toggle('good', onTarget)
-  setText('map-description', fixed ? `GPS estimate ${onTarget ? 'within one metre' : format.format(horizontalError) + ' metres'} of the actual phone on the ground.` :
-    'No GPS estimate. The actual phone remains in place.')
-  setText('signal-count', active.length + (active.length === 1 ? ' signal' : ' signals'))
-  $('estimated-clock').innerHTML = state.fitClock
-    ? (fixed ? signed(result.clockUs, 2) + ' µs' : '—')
-    : '0.00 µs <small>assumed</small>'
-  setText('height-error', fixed ? signed(displacement[2]) + ' m' : '—')
-  setText('mismatch', fixed ? result.rms.toFixed(1) + ' m' : '—')
+  $('offset').setAttribute('aria-valuetext', state.offset === 0 ? 'Clock exact' : Math.abs(state.offset) + ' microseconds ' + (state.offset < 0 ? 'slow' : 'fast'))
+  text('clock-value', signed(state.offset, 2) + ' µs')
+  $('probe').value = state.probe
+  if (sample) {
+    text('probe-value', signed(sample.clockUs, 2) + ' µs')
+    $('probe').setAttribute('aria-valuetext', signed(sample.clockUs, 2) + ' microseconds guessed clock error')
+  }
 
-  satellites.forEach(({ id, azimuth, elevation }) => {
-    const button = buttons.get(id)
-    const name = id.toUpperCase() + (id === 's6' && state.echo ? ', delayed signal' : '')
-    button.setAttribute('aria-pressed', state.enabled.has(id))
-    button.setAttribute('aria-label', 'Satellite ' + name)
-    button.title = `${name} · azimuth ${azimuth}° · elevation ${elevation}°`
-    button.dataset.delayed = id === 's6' && state.echo > 0
+  $('scene-value').dataset.kind = hasTrail ? 'trail' : model.onTarget ? 'fit' : 'error'
+  text('scene-status-label', hasTrail ? 'NO UNIQUE GPS FIX' : 'GPS ESTIMATE')
+  text('scene-value', hasTrail ? 'Many places fit.' : fixed ? (model.onTarget ? 'On target.' : integer.format(error) + ' m off') : 'No fix.')
+  text('scene-note', hasTrail && sample
+    ? integer.format(Math.hypot(sample.offset[0], sample.offset[1])) + ' m away · ' + integer.format(Math.abs(sample.offset[2])) + (sample.offset[2] < -.5 ? ' m lower' : ' m higher')
+    : fixed ? (model.onTarget ? 'Position and time agree.' : 'Ground distance from the actual phone.') : 'The actual phone is still here.')
+  $('estimate-key').hidden = !fixed
+  $('trail-key').hidden = !hasTrail
+  text('orbit-hint', scene ? (hasTrail ? 'Tap the trail or drag to orbit' : 'Drag to orbit') : 'Projected view')
+  text('signal-count', active.length + ' in use')
+}
+
+function renderStrips() {
+  const { active, ideal, observed, result, sample } = model
+  const fitClock = state.fitClock && result.status === 'fixed'
+  const bias = state.offset * metersPerMicrosecond
+  const fittedBias = fitClock ? result.clockUs * metersPerMicrosecond : 0
+  const stillWrong = state.noise > 0 || (state.echo > 0 && state.enabled.has('s6'))
+  const description = sample
+    ? sample.rms < .01 ? 'All 3 readings match this guess.' : 'This guess leaves ' + sample.rms.toFixed(2) + ' m of mismatch.'
+    : fitClock ? 'Estimated clock error ' + signed(result.clockUs, 2) + ' µs.' + (stillWrong ? ' Some range error remains.' : '')
+      : bias === 0 ? 'The clock adds no error to the readings.' :
+        'The clock makes every signal look ' + integer.format(Math.abs(bias)) + (bias < 0 ? ' m shorter.' : ' m longer.')
+  text('signal-caption', description)
+
+  $('signal-strips').innerHTML = ids.map((id, i) => {
+    const signalIndex = active.findIndex(reading => reading.id === id)
+    if (i >= 4 && signalIndex === -1) return ''
+    const extra = sample && signalIndex >= 0 ? sample.residuals[signalIndex] : observed[i].range - ideal[i].range - fittedBias
+    const cursor = Math.max(3, Math.min(97, 50 + extra / 13))
+    return `<div class="strip" data-active="${signalIndex !== -1}" data-delayed="${i === 5 && state.echo > 0}">${id.toUpperCase()}<span class="strip-track" style="--cursor:${cursor}%"></span></div>`
+  }).join('')
+}
+
+function renderButtons() {
+  ids.forEach((id, index) => {
+    const active = state.enabled.has(id)
+    const button = switchButtons[index]
+    button.hidden = index > 3 && !active
+    button.setAttribute('aria-pressed', active)
+    skyButtons[index].setAttribute('aria-pressed', active)
+    skyButtons[index].dataset.active = active
   })
+}
 
-  setText('trial-four', isThreeSignalTrial() ? 'Restore the fourth signal' : 'Try with three signals')
+function milliseconds(metres) {
+  return (metres / metersPerMicrosecond / 1000).toFixed(6) + ' ms'
+}
+
+function inspectReading() {
+  const index = ids.indexOf($('reading-satellite').value)
+  const observed = model.observed[index]
+  const ideal = model.ideal[index]
+  const enabled = state.enabled.has(observed.id)
+  text('true-time', milliseconds(ideal.range))
+  text('measured-time', enabled ? milliseconds(observed.range) : 'Signal off')
+  text('apparent-distance', enabled ? integer.format(observed.range) + ' m' : '—')
+  text('reading-note', enabled
+    ? signed(observed.range - ideal.range, 2) + ' m compared with the true range.'
+    : 'The receiver is ignoring this satellite. Restore the signal in the scene to use its reading.')
+}
+
+function renderDetails() {
+  const { result, active, observed, ideal, error, sample } = model
+  const fixed = result.status === 'fixed'
   document.querySelector(`input[name="layout"][value="${state.layout}"]`).checked = true
-  setText('dop-value', fixed ? result.hdop.toFixed(2) : '—')
-  setText('dop-caption', fixed ? 'Higher means noisier positions.' : 'A fix is needed to measure this.')
   $('noise').value = state.noise
-  setText('noise-value', state.noise + ' m')
-  $('noise-result').hidden = state.noise === 0 || !fixed
-  setText('noise-result', fixed ? `This fix is ${format.format(horizontalError)} m off on the ground.` : '')
-  const sixthSignalEnabled = state.enabled.has('s6')
-  setText('trial-echo', sixthSignalEnabled && state.echo > 0 ? 'Clear the echo' : 'Add a 40 m echo')
-  $('echo-control').hidden = !sixthSignalEnabled
+  text('noise-value', state.noise + ' m')
+  text('geometry-result', fixed ? integer.format(error) + ' m off on the ground · HDOP ' + result.hdop.toFixed(2) : 'Restore the fix to compare the geometry.')
+  const sixthOn = state.enabled.has('s6')
+  text('trial-echo', sixthOn && state.echo > 0 ? 'Clear the echo' : 'Add a 40 m echo')
+  $('echo-control').hidden = !sixthOn
   $('echo').value = state.echo
-  setText('echo-value', state.echo + ' m')
-  $('echo-result').hidden = !sixthSignalEnabled
-  setText('echo-result', fixed ? `${error} · ${result.rms.toFixed(1)} m signal mismatch` : 'Restore the fix to see signal mismatch.')
+  text('echo-value', state.echo + ' m')
+  text('echo-result', sixthOn && fixed ? result.rms.toFixed(1) + ' m signal mismatch · ' + integer.format(error) + ' m off on the ground' : '')
+  inspectReading()
 
-  renderLedger(all, active, result)
-  drawSky(skyCanvas, satellites, buttons, state.enabled)
-  setGround(displacement, animate)
+  $('measurements').innerHTML = observed.map(({ id, range }, i) => {
+    const index = active.findIndex(signal => signal.id === id)
+    const residuals = fixed ? result.residuals : sample?.residuals
+    const values = index >= 0
+      ? [milliseconds(range), integer.format(range) + ' m', residuals ? signed(residuals[index], 2) + ' m' : '—']
+      : ['Signal off', '—', '—']
+    return `<tr><td>${id.toUpperCase()}</td><td>${integer.format(ideal[i].range)} m</td>${values.map(value => `<td>${value}</td>`).join('')}</tr>`
+  }).join('')
+  const steps = fixed ? result.steps : sample?.steps
+  $('iterations').innerHTML = !steps
+    ? '<tr><td colspan="5">Restore signals to see the receiver updates.</td></tr>'
+    : [{ position: [0, 0, 0], clockUs: sample?.clockUs ?? 0 }, ...steps].map((step, i) =>
+      `<tr><td>${i || 'Start'}</td>${step.position.map(value => `<td>${signed(value, 3)} m</td>`).join('')}<td>${signed(sample?.clockUs ?? step.clockUs, 4)} µs</td></tr>`
+    ).join('')
 }
 
-function setText(id, text) {
-  if ($(id).textContent !== text) $(id).textContent = text
+function render() {
+  indicateClock()
+  renderStrips()
+  renderButtons()
+  renderDetails()
+  const data = { ...model, enabled: state.enabled }
+  if (scene) scene.update(data)
+  else fallback.update(data)
 }
 
+function update() {
+  model = buildModel()
+  sampleTrail()
+  render()
+}
+
+function useFallback() {
+  scene = null
+  $('world').hidden = true
+  $('fallback').hidden = false
+  $('phone-entry').hidden = true
+  $('sky-buttons').hidden = true
+  $('scene-tags').hidden = true
+  $('reset-view').hidden = true
+  text('orbit-hint', 'Projected view')
+  document.body.dataset.renderer = 'canvas'
+  fallback.setMode(mode)
+  fallback.update({ ...model, enabled: state.enabled })
+}
+
+$('enter').addEventListener('click', () => enter())
+$('phone-entry').addEventListener('click', () => enter())
+$('replay').addEventListener('click', replay)
+$('brand').addEventListener('click', replay)
+$('inspect-link').addEventListener('click', openDetails)
+$('back-to-experiment').addEventListener('click', () => {
+  $('experiment').scrollIntoView({ behavior: motion.matches ? 'instant' : 'smooth' })
+  $('lesson-title').focus({ preventScroll: true })
+})
+$('reset-view').addEventListener('click', () => scene?.resetView())
+$('reset').addEventListener('click', () => {
+  state = fresh()
+  update()
+  scene?.resetView()
+})
 $('offset').addEventListener('input', event => {
   state.offset = Number(event.currentTarget.value)
+  state.restored = false
+  update()
+})
+$('probe').addEventListener('input', event => {
+  state.probe = Number(event.currentTarget.value)
+  sampleTrail()
   render()
 })
-$('clock').addEventListener('click', () => {
-  state.fitClock = !state.fitClock
-  render(true)
+$('action').addEventListener('click', () => {
+  if (model.trail.length > 1) {
+    const restore = state.enabled.has(state.restoreId) ? ids.find(id => !state.enabled.has(id)) : state.restoreId
+    toggleSignal(restore)
+    return
+  }
+  if (model.result.status !== 'fixed') {
+    state.enabled = new Set(firstFour)
+    state.fitClock = true
+  } else if (!state.fitClock) {
+    state.fitClock = true
+  } else {
+    beforeCut()
+    const last = model.active.length === 4 ? model.active.at(-1).id : 's4'
+    state.restoreId = last
+    state.enabled = new Set(model.active.length === 4 ? model.active.slice(0, 3).map(signal => signal.id) : firstFour.slice(0, 3))
+  }
+  update()
 })
-$('reset').addEventListener('click', () => {
-  state = defaultState()
-  render(true)
+$('assume-clock').addEventListener('click', () => {
+  state.fitClock = false
+  state.restored = false
+  update()
 })
-function isThreeSignalTrial() {
-  return state.fitClock && state.enabled.size === 3 && firstFour.slice(0, 3).every(id => state.enabled.has(id))
-}
-
-$('trial-four').addEventListener('click', () => {
-  const restore = isThreeSignalTrial()
-  state.fitClock = true
-  state.enabled = new Set(restore ? firstFour : firstFour.slice(0, 3))
-  state.echo = 0
-  state.noise = 0
-  render()
-  $('experiment').scrollIntoView()
-  buttons.get('s4').focus({ preventScroll: true })
-})
+$('reading-satellite').addEventListener('change', inspectReading)
 document.querySelectorAll('input[name="layout"]').forEach(input => input.addEventListener('change', () => {
   state.layout = input.value
   state.fitClock = true
-  render(true)
+  state.restored = false
+  update()
 }))
 $('noise').addEventListener('input', event => {
   state.noise = Number(event.currentTarget.value)
   state.fitClock = true
-  render()
+  state.restored = false
+  update()
 })
 $('trial-echo').addEventListener('click', () => {
-  if (state.enabled.has('s6') && state.echo > 0) {
-    state.echo = 0
-  } else {
-    state.enabled = new Set([...firstFour, 's5', 's6'])
-    state.echo = 40
+  state.restored = false
+  if (state.enabled.has('s6') && state.echo > 0) state.echo = 0
+  else {
+    state.enabled = new Set(ids)
     state.fitClock = true
+    state.echo = 40
+    $('reading-satellite').value = 's6'
   }
-  render(true)
+  update()
 })
 $('echo').addEventListener('input', event => {
   state.echo = Number(event.currentTarget.value)
+  state.restored = false
+  update()
+})
+
+update()
+setLayoutVisibility()
+
+import('./scene.mjs').then(({ createScene }) => {
+  scene = createScene({
+    canvas: $('world'), visual: $('visual'), tags, skyButtons, phoneEntry: $('phone-entry'),
+    status: document.querySelector('.scene-status'), motion, onLost: useFallback,
+    onProbe(clockUs) {
+      state.probe = Math.round(50 * (1 + (clockUs - state.trailCenter) / clockWindow))
+      sampleTrail()
+      render()
+    }
+  })
+  if (mode === 'lab') scene.enter(false)
   render()
+  document.body.dataset.renderer = 'webgl'
+  requestAnimationFrame(() => {
+    if (scene) $('fallback').hidden = true
+  })
+}).catch(error => {
+  console.info('Using the Canvas view.', error.message)
+  useFallback()
 })
-const resize = new ResizeObserver(() => {
-  drawSky(skyCanvas, satellites, buttons, state.enabled)
-  setGround(target, false)
-})
-resize.observe(skyCanvas)
-resize.observe(groundCanvas)
-render()
