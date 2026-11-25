@@ -191,6 +191,19 @@ function drawStatus(ctx) {
   box(ctx, 425, 38, 2, 5, 1, '#c9d4ed')
 }
 
+function drawMeetup(ctx, time) {
+  const opacity = 1 - ease((time - 1.18) / .36)
+  if (!opacity) return
+  ctx.save()
+  ctx.globalAlpha = opacity
+  box(ctx, 26, 177, 396, 72, 14, '#23344d', '#698db9')
+  circle(ctx, 61, 213, 17, '#95b8f4')
+  label(ctx, 'M', 54, 219, 17, '#122743', 750)
+  label(ctx, 'Maya', 91, 207, 16, '#c6dbfc', 680)
+  label(ctx, 'I’m at the Gardens!', 91, 229, 19, '#f3f8ff', 630)
+  ctx.restore()
+}
+
 function drawSearch(ctx, text, isTyping, isReady, time) {
   const top = ctx.createLinearGradient(0, 0, 0, 196)
   top.addColorStop(0, 'rgba(10, 16, 31, .96)')
@@ -497,6 +510,7 @@ export function createPhone(THREE) {
     ctx.drawImage(map, 0, 0)
     drawRoute(ctx, progress, time, reducedMotion)
     drawSearch(ctx, query, typing, progress === 1, time)
+    drawMeetup(ctx, time)
     drawTrip(ctx, progress)
     const keyboard = ease((time - 0.25) / 0.3) * (1 - ease((time - 2.47) / (keyboardEnd - 2.47)))
     if (keyboard > 0) drawKeyboard(ctx, count > 0 ? destination[count - 1] : null, keyboard)

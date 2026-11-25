@@ -1,16 +1,16 @@
 # Inside the Blue Dot
 
-[Open the live experiment](https://aryaveer716.github.io/one-microsecond/) · [Round 1 project page](submission.md) · [Demo video](https://github.com/Aryaveer716/one-microsecond/releases/download/blue-dot/inside-the-blue-dot.mp4)
+[Open the live experiment](https://aryaveer716.github.io/one-microsecond/) · [Round 1 project page](submission.md) · [Demo video](https://github.com/Aryaveer716/one-microsecond/releases/download/guided-blue-dot/inside-the-blue-dot.mp4)
 
-The phone already knows where to start when you ask it for directions. Follow its blue dot into a 3D waterfront and see what the receiver does with its four satellite readings.
+A friend is waiting at Gardens by the Bay. Before your phone can tell you how to get there, it has to find your starting point. Follow its blue dot into a 3D waterfront and take it one signal at a time.
 
-1. **Follow the blue dot.** The phone searches for Gardens by the Bay in a fictional navigation scene.
-2. **Move the clock slider.** The true phone stays put. The GPS estimate moves. In the opening setup, one microsecond adds about 300 metres to each apparent distance and moves the horizontal fix about 163 metres.
-3. **Let GPS solve it.** Solve position and clock together, then vary the clock again and watch the fix hold in the ideal case.
-4. **Cut one satellite.** Three readings fit an entire nearby trail of locations and clock errors. Select a point on the trail or use the slider to inspect its clock guess and range agreement.
+1. **Catch a signal.** Read a computed flight time and see how it becomes a distance.
+2. **Make the clock run fast.** One microsecond adds about 300 metres to each apparent distance and moves the horizontal fix about 163 metres in the opening setup.
+3. **Find the right fix.** GPS estimates position and clock error together.
+4. **Take one signal away.** Pick two points on the trail. Three readings can agree with different locations and clock errors.
 5. **Restore the fourth signal.** See how far that reading disagreed with your chosen guess. The trail converges to one local fix.
 
-**How GPS works** opens the real readings, solver updates, and experiments with crowded satellite geometry and a reflected path.
+**Open sandbox** skips the story. After the story you can continue there with the restored fix or return to a sandbox you already opened. **How GPS works** opens the individual readings, solver updates, and experiments with crowded satellite geometry and a reflected path.
 
 ## What the receiver computes
 
@@ -50,7 +50,8 @@ Open `http://localhost:8661` after starting the server. Run the tests in another
 | File | Role |
 | --- | --- |
 | `dist/gps.mjs` | Sky geometry, signal observations, solver and ambiguity trail |
-| `dist/app.mjs` | Inputs, experiment state, readouts and timing inspector |
+| `dist/app.mjs` | Inputs, experiment state, story navigation, readouts and timing inspector |
+| `dist/story.mjs` | Guided copy and live readouts derived from the receiver state |
 | `dist/scene.mjs` | WebGL camera, signal animation, markers and trail picking |
 | `dist/city.mjs`, `dist/phone.mjs` | Procedural waterfront and navigational phone |
 | `dist/fallback.mjs` | Interactive Canvas projection |

@@ -1,6 +1,6 @@
 # Inside the Blue Dot
 
-[Live experiment](https://aryaveer716.github.io/one-microsecond/) · [Public source](https://github.com/Aryaveer716/one-microsecond) · [Demo video](https://github.com/Aryaveer716/one-microsecond/releases/download/blue-dot/inside-the-blue-dot.mp4)
+[Live experiment](https://aryaveer716.github.io/one-microsecond/) · [Public source](https://github.com/Aryaveer716/one-microsecond) · [Demo video](https://github.com/Aryaveer716/one-microsecond/releases/download/guided-blue-dot/inside-the-blue-dot.mp4)
 
 ## Round 1 project page
 
@@ -14,7 +14,7 @@ JavaScript, HTML, CSS, Three.js for 3D rendering and Canvas for fallback. The GP
 
 **What your project is about**
 
-Follow a phone’s blue dot into a 3D receiver. Change the phone’s clock and watch its location jump while the actual phone stays put. Let GPS fit the clock and location, then turn off one satellite. The fix opens into a trail of possible locations. Pick two different spots and see how both can match the same three readings. Restore the fourth reading and see exactly how far it disagreed with your pick.
+A friend is waiting at Gardens by the Bay. Before the route can start, your phone has to find you. Fly through the blue dot, catch a satellite signal, and see its time become a distance. Speed up the clock and watch the pin move. Then take away one satellite. Pick two points on the resulting trail and see how both fit the same three signals. Restore the fourth to test your guess, then explore freely in the sandbox.
 
 **Who is it for?**
 
@@ -43,4 +43,4 @@ GPS has to work out what time it is while figuring out where you are. A milliont
 
 ## First-view test
 
-Open the live link in a new browser session for someone who has never seen it. Ask them to explore without hints. Afterwards ask what made the pin move, what changed while they scrubbed the trail, and how the fourth signal helped. Record how long they took and whether their explanation matches what happened.
+Open the live link in a new browser session for someone who has never seen it. Ask them to follow the story without hints. Afterwards ask what the phone measured, why its clock moved the pin, and how the fourth signal helped. Record how long they took and whether their explanation matches what happened.

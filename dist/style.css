@@ -305,3 +305,85 @@ tr:last-child td { border-bottom: 0; }
   .strips { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .action span { line-height: 1; }
 }
+
+.story .controls-top { margin-bottom: 9px; }
+#story-chapter, #story-step {
+  color: #b8c9ed;
+  font: 650 .7rem/1.2 var(--mono);
+  letter-spacing: .07em;
+}
+#story-step { letter-spacing: 0; white-space: nowrap; }
+#story-progress {
+  display: block;
+  width: 100%;
+  height: 4px;
+  appearance: none;
+  border: 0;
+  border-radius: 4px;
+  background: #293852;
+  color: #9ab9fa;
+  margin: 0 0 23px;
+}
+#story-progress::-webkit-progress-bar { background: #293852; border-radius: 4px; }
+#story-progress::-webkit-progress-value { background: #a3c4ff; border-radius: 4px; }
+#story-progress::-moz-progress-bar { background: #a3c4ff; border-radius: 4px; }
+.story .lesson h2 { max-width: 12ch; }
+.story .lesson p { margin-top: 12px; }
+.story-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  border-block: 1px solid var(--line);
+  margin: 16px 0;
+}
+.story-facts > div { padding: 10px 0 11px; }
+.story-facts > div + div { border-left: 1px solid var(--line); padding-left: 12px; }
+.story-facts strong {
+  display: block;
+  color: var(--blue);
+  font: 620 clamp(1.21rem, 2.1vw, 1.85rem)/1.08 var(--title);
+  letter-spacing: -.05em;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.story-facts span { display: block; color: var(--muted); font-size: .75rem; line-height: 1.24; margin-top: 4px; }
+.story .action { margin-top: 8px; }
+.story .action span { line-height: 1; }
+.flight { max-width: 380px; margin-top: 17px; color: var(--muted); font: .66rem var(--mono); }
+.flight > div:last-child { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; }
+.flight-line { height: 9px; position: relative; }
+.flight-line::before {
+  content: "";
+  position: absolute;
+  inset: 3px 2px 2px;
+  border-radius: 7px;
+  background: linear-gradient(90deg, #5f81bb, #91b7ff);
+}
+.flight-line::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 9px;
+  height: 9px;
+  background: #d6e7ff;
+  border-radius: 50%;
+  box-shadow: 0 0 12px #93bcff;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .flight:not([hidden]) .flight-line::after { animation: arrive .92s ease both; }
+  @keyframes arrive { from { left: 0; } to { left: calc(100% - 9px); } }
+}
+@media (max-width: 850px) {
+  .story .lesson h2 { max-width: 23ch; }
+  #replay { display: none; }
+}
+@media (max-width: 600px) {
+  #story-progress { margin-bottom: 12px; }
+  .story .lesson p { margin-top: 6px; }
+  .story-facts { margin: 10px 0; }
+}
+@media (max-width: 600px) and (max-height: 720px) {
+  [data-view="story"] .visual { height: 32svh; min-height: 202px; }
+  .story .lesson { margin-bottom: 9px; }
+  .story-facts > div { padding-top: 7px; padding-bottom: 7px; }
+}

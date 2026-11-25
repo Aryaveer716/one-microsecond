@@ -16,6 +16,7 @@
     <button class="brand" id="brand" type="button"><span class="brand-mark" aria-hidden="true"></span> Blue Dot</button>
     <nav aria-label="Experience">
       <button id="replay" type="button" hidden>Replay opening</button>
+      <button id="view-switch" type="button">Open sandbox</button>
       <button id="inspect-link" type="button">How GPS works</button>
     </nav>
   </header>
@@ -28,7 +29,7 @@
         <section class="intro" aria-labelledby="title">
           <p class="intro-label"><span aria-hidden="true"></span> AN INTERACTIVE GPS EXPERIMENT</p>
           <h1 id="title">Inside the<br><em>blue dot.</em></h1>
-          <p>You type a destination. Your phone already knows where to start. Follow the blue dot to find out how.</p>
+          <p>A friend is waiting at the Gardens. Before your phone can show you the way, it has to find where you’re standing.</p>
           <button class="enter" id="enter" type="button">Follow the blue dot <span aria-hidden="true">↗</span></button>
         </section>
         <p class="place"><span aria-hidden="true"></span> MARINA BAY, SINGAPORE</p>
@@ -51,6 +52,29 @@
           </div>
         </div>
       </div>
+
+      <aside class="controls story" id="story" aria-labelledby="story-title" hidden>
+        <div class="controls-top"><span id="story-chapter">THE GUIDED STORY</span><span id="story-step"></span></div>
+        <progress id="story-progress" max="6" value="1" aria-label="Guided story progress"></progress>
+        <div class="lesson">
+          <h2 id="story-title" tabindex="-1"></h2>
+          <p id="story-copy"></p>
+        </div>
+        <div class="flight" id="story-flight" aria-hidden="true" hidden>
+          <div class="flight-line"></div>
+          <div><span>Satellite sends</span><span>Phone receives</span></div>
+        </div>
+        <div class="story-facts" id="story-facts" aria-live="polite" hidden>
+          <div><strong id="story-fact-first"></strong><span id="story-label-first"></span></div>
+          <div><strong id="story-fact-second"></strong><span id="story-label-second"></span></div>
+        </div>
+        <div class="experiment-control" id="story-probe-control" hidden>
+          <label for="story-probe">Try a point on the trail</label><output id="story-probe-value" for="story-probe"></output>
+          <input id="story-probe" type="range" min="0" max="100" step="1" value="25" aria-describedby="story-facts scene-note">
+          <div class="scale" aria-hidden="true"><span>Smaller clock guess</span><span>Larger clock guess</span></div>
+        </div>
+        <button class="action" id="story-next" type="button">Catch a signal <span aria-hidden="true">↗</span></button>
+      </aside>
 
       <aside class="controls" id="controls" aria-label="GPS experiment controls" hidden>
         <div class="controls-top"><span id="phase">THE CLOCK</span><button id="reset" type="button">Restart experiment</button></div>

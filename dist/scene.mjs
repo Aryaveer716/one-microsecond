@@ -338,10 +338,11 @@ export function createScene({ canvas, visual, tags, skyButtons, phoneEntry, stat
       else placeTag(label, tagPositions[i], camera, width, height, statusBounds)
     })
     const pulseTarget = marker.actual.position.clone().add(vector(0, .35, 0))
+    const singleSignal = current.storyStep === 'listen' || current.storyStep === 'range'
     signals.forEach(({ unit, beam, pulse }, i) => {
       const satellite = current.sky[i]
       const active = current.enabled.has(satellite.id)
-      const visible = i < 4 || active
+      const visible = active || (!singleSignal && i < 4)
       const [east, north, up] = satellite.position
       const length = Math.hypot(east, north, up)
       const position = vector(23 * east / length, 5.8 + 15 * up / length, -19 * north / length)
@@ -352,7 +353,9 @@ export function createScene({ canvas, visual, tags, skyButtons, phoneEntry, stat
       pulse.visible = active
       if (active) {
         updateLine(beam, unit.position, pulseTarget)
-        const phase = motion.matches ? .53 : (seconds * .85 + i * .21) % 1
+        let phase = motion.matches ? .53 : (seconds * .85 + i * .21) % 1
+        if (current.storyStep === 'listen') phase = 0
+        if (current.storyStep === 'range') phase = motion.matches ? 1 : limit((now - current.flightAt) / 920, 0, 1)
         pulse.position.lerpVectors(unit.position, pulseTarget, phase)
         pulse.scale.setScalar(.77 + .39 * Math.sin(phase * Math.PI))
       }

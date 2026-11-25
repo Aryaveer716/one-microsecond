@@ -79,7 +79,8 @@ export function createFallback(canvas) {
     }
     const actual = project([0, 0, 0])
     data.sky.forEach((satellite, i) => {
-      if (i >= 4 && !data.enabled.has(satellite.id)) return
+      const singleSignal = data.storyStep === 'listen' || data.storyStep === 'range'
+      if ((i >= 4 || singleSignal) && !data.enabled.has(satellite.id)) return
       const ratio = 1 / Math.hypot(...satellite.position)
       const [east, north, up] = satellite.position.map(value => value * ratio)
       const point = [width * (.49 + east * .37 - .14 * north), height * (.56 - up * .34 - .11 * north)]

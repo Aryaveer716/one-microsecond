@@ -1,5 +1,6 @@
 import { makeSky, measure, metersPerMicrosecond, solve, solveAtClock, traceClockGuesses } from './gps.mjs'
 import { createFallback } from './fallback.mjs'
+import { storyCard, storySteps } from './story.mjs'
 
 const $ = id => document.getElementById(id)
 const phone = [135, -70, 18]
@@ -15,6 +16,9 @@ const fresh = () => ({
 
 let state = fresh()
 let mode = 'opening'
+let storyStep = null
+let savedSandbox = null
+let flightAt = 0
 let scene = null
 let model = null
 const fallback = createFallback($('fallback'))
@@ -78,19 +82,57 @@ function sampleTrail() {
 function setLayoutVisibility() {
   document.body.dataset.mode = mode
   const opening = mode === 'opening'
-  for (const id of ['scene-overlay', 'controls', 'inside', 'replay']) $(id).hidden = opening
+  const guided = !opening && storyStep !== null
+  document.body.dataset.view = guided ? 'story' : opening ? 'opening' : 'sandbox'
+  for (const id of ['scene-overlay', 'replay']) $(id).hidden = opening
+  for (const id of ['controls', 'inside']) $(id).hidden = opening || guided
+  $('story').hidden = !guided
+  $('sky-buttons').hidden = guided || !scene
+  text('view-switch', opening || guided ? 'Open sandbox' : 'Guided story')
   if (!opening) $('phone-entry').hidden = true
   fallback.setMode(mode)
 }
 
-function enter(animate = true) {
-  if (mode === 'opening') {
-    mode = 'lab'
-    setLayoutVisibility()
+function enterLab(heading, animate) {
+  const fromOpening = mode === 'opening'
+  mode = 'lab'
+  setLayoutVisibility()
+  update()
+  if (fromOpening) {
     scene?.enter(animate)
     window.scrollTo(0, 0)
   }
-  $('lesson-title').focus({ preventScroll: true })
+  $(heading).focus({ preventScroll: true })
+}
+
+function startStory() {
+  if (mode === 'lab' && !storyStep) savedSandbox = state
+  state = { ...fresh(), offset: 0, enabled: new Set(['s1']) }
+  storyStep = 'listen'
+  enterLab('story-title', true)
+  window.scrollTo(0, 0)
+}
+
+function openSandbox({ keepStory = false, scroll = true } = {}) {
+  if (storyStep || mode === 'opening') state = savedSandbox ?? (keepStory ? state : fresh())
+  storyStep = null
+  enterLab('lesson-title', false)
+  if (scroll) window.scrollTo(0, 0)
+}
+
+function advanceStory() {
+  const previous = storyStep
+  if (previous === 'arrival') return openSandbox({ keepStory: true })
+  storyStep = storySteps[storySteps.indexOf(previous) + 1]
+  if (previous === 'listen') flightAt = performance.now()
+  if (previous === 'range') {
+    state.offset = 1
+    state.enabled = new Set(firstFour)
+  }
+  if (previous === 'clock') state.fitClock = true
+  if (previous === 'fix' || previous === 'trail') toggleSignal('s4')
+  else update()
+  $('story-title').focus({ preventScroll: true })
 }
 
 function replay() {
@@ -98,6 +140,8 @@ function replay() {
     scene?.replay()
     return
   }
+  if (!storyStep) savedSandbox = state
+  storyStep = null
   mode = 'opening'
   setLayoutVisibility()
   scene?.replay()
@@ -106,7 +150,7 @@ function replay() {
 }
 
 function openDetails() {
-  enter(false)
+  openSandbox({ scroll: false })
   $('inside').scrollIntoView({ behavior: motion.matches ? 'instant' : 'smooth', block: 'start' })
   $('inside-title').focus({ preventScroll: true })
 }
@@ -287,12 +331,48 @@ function renderDetails() {
     ).join('')
 }
 
+function renderStory() {
+  if (!storyStep) return
+  const number = storySteps.indexOf(storyStep) + 1
+  const { title, body, action, facts } = storyCard(storyStep, model, state.fourthCheck, integer, signed)
+  $('story-progress').value = number
+  text('story-step', number + ' of ' + storySteps.length)
+  text('story-title', title)
+  text('story-copy', body)
+  if ($('story-next').firstChild.textContent.trim() !== action) $('story-next').firstChild.textContent = action + ' '
+  $('story-facts').hidden = !facts
+  $('story-flight').hidden = storyStep !== 'range'
+  $('story-probe-control').hidden = storyStep !== 'trail'
+  if (facts) {
+    text('story-fact-first', facts[0][0])
+    text('story-label-first', facts[0][1])
+    text('story-fact-second', facts[1][0])
+    text('story-label-second', facts[1][1])
+  }
+  if (model.sample) {
+    $('story-probe').value = state.probe
+    $('story-probe').setAttribute('aria-valuetext', signed(model.sample.clockUs, 2) + ' microseconds guessed clock error')
+    text('story-probe-value', signed(model.sample.clockUs, 2) + ' µs')
+  }
+  if (storyStep === 'listen' || storyStep === 'range') {
+    $('scene-value').dataset.kind = 'trail'
+    text('scene-status-label', 'ONE SATELLITE')
+    text('scene-value', storyStep === 'listen' ? 'Listening.' : 'Signal caught.')
+    text('scene-note', storyStep === 'listen' ? 'The phone is waiting for a time stamp.' : 'One distance to a satellite still leaves many places you could be.')
+  }
+}
+
+function sceneData() {
+  return { ...model, enabled: state.enabled, storyStep, flightAt }
+}
+
 function render() {
   indicateClock()
   renderStrips()
   renderButtons()
   renderDetails()
-  const data = { ...model, enabled: state.enabled }
+  renderStory()
+  const data = sceneData()
   if (scene) scene.update(data)
   else fallback.update(data)
 }
@@ -314,11 +394,21 @@ function useFallback() {
   text('orbit-hint', 'Projected view')
   document.body.dataset.renderer = 'canvas'
   fallback.setMode(mode)
-  fallback.update({ ...model, enabled: state.enabled })
+  fallback.update(sceneData())
 }
 
-$('enter').addEventListener('click', () => enter())
-$('phone-entry').addEventListener('click', () => enter())
+$('enter').addEventListener('click', startStory)
+$('phone-entry').addEventListener('click', startStory)
+$('view-switch').addEventListener('click', () => {
+  if (mode === 'lab' && !storyStep) startStory()
+  else openSandbox()
+})
+$('story-next').addEventListener('click', advanceStory)
+$('story-probe').addEventListener('input', event => {
+  state.probe = Number(event.currentTarget.value)
+  sampleTrail()
+  render()
+})
 $('replay').addEventListener('click', replay)
 $('brand').addEventListener('click', replay)
 $('inspect-link').addEventListener('click', openDetails)
@@ -410,6 +500,7 @@ import('./scene.mjs').then(({ createScene }) => {
     }
   })
   if (mode === 'lab') scene.enter(false)
+  setLayoutVisibility()
   render()
   document.body.dataset.renderer = 'webgl'
   requestAnimationFrame(() => {
