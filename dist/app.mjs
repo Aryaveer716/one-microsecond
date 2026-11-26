@@ -1,9 +1,11 @@
 import { makeSky, measure, metersPerMicrosecond, solve, solveAtClock, traceClockGuesses } from './gps.mjs'
 import { createFallback } from './fallback.mjs'
-import { storyCard, storySteps } from './story.mjs'
+import { rangeDifference, storyCard, storySteps } from './story.mjs'
+import { fieldCases, receiverSites } from './field.mjs'
+import { auditSignals } from './audit.mjs'
 
 const $ = id => document.getElementById(id)
-const phone = [135, -70, 18]
+const origin = [135, -70, 18]
 const firstFour = ['s1', 's2', 's3', 's4']
 const ids = [...firstFour, 's5', 's6']
 const rangeNoise = [.5, -.9, .7, -.3, .2, .4]
@@ -11,7 +13,8 @@ const motion = matchMedia('(prefers-reduced-motion: reduce)')
 const integer = new Intl.NumberFormat('en', { maximumFractionDigits: 0 })
 const fresh = () => ({
   offset: 1, fitClock: false, layout: 'open', enabled: new Set(firstFour), probe: 25,
-  trailCenter: 0, restoreId: 's4', restored: false, fourthCheck: null, noise: 0, echo: 0
+  trailCenter: 0, restoreId: 's4', restored: false, fourthCheck: null, noise: 0, echo: 0,
+  site: 'waterfront', showExtras: false
 })
 
 let state = fresh()
@@ -19,10 +22,14 @@ let mode = 'opening'
 let storyStep = null
 let savedSandbox = null
 let flightAt = 0
+let clockTrial = 0
+let bookmarks = []
+let review = null
+let omittedTrial = null
 let scene = null
 let model = null
 const fallback = createFallback($('fallback'))
-const displacement = xyz => xyz.map((value, i) => value - phone[i])
+const displacement = xyz => xyz.map((value, i) => value - origin[i])
 const clockWindow = .86
 const clockGuess = percentage => state.trailCenter + (percentage / 50 - 1) * clockWindow
 
@@ -51,23 +58,28 @@ const switchButtons = ids.map(id => satelliteButton(id, $('sat-switches')))
 const skyButtons = ids.map(id => satelliteButton(id, $('sky-buttons'), 'sky-button'))
 const tags = { actual: $('actual-tag'), estimate: $('estimate-tag'), probe: $('probe-tag') }
 ids.forEach(id => $('reading-satellite').add(new Option(id.toUpperCase(), id)))
+Object.entries(receiverSites).forEach(([id, site]) => $('receiver-site').add(new Option(site.name, id)))
+$('field-case').add(new Option('Load an experiment', ''))
+Object.entries(fieldCases).forEach(([id, label]) => $('field-case').add(new Option(label, id)))
 
 function buildModel() {
   const sky = makeSky(state.layout)
+  const actualOffset = receiverSites[state.site].offset
+  const receiver = origin.map((value, i) => value + actualOffset[i])
   const errors = Object.fromEntries(ids.map((id, i) => [id, state.noise * rangeNoise[i]]))
   errors.s6 += state.echo
-  const ideal = measure(sky, phone, 0)
-  const observed = measure(sky, phone, state.offset, errors)
+  const ideal = measure(sky, receiver, 0)
+  const observed = measure(sky, receiver, state.offset, errors)
   const active = observed.filter(signal => state.enabled.has(signal.id))
-  const result = solve(active, state.fitClock)
+  const result = storyStep === 'clock' ? solveAtClock(active, clockTrial) : solve(active, state.fitClock)
   const position = result.status === 'fixed' ? displacement(result.position) : null
-  const error = position ? Math.hypot(position[0], position[1]) : null
-  const onTarget = position && error < .5 && Math.abs(position[2]) < .5
+  const error = position ? Math.hypot(position[0] - actualOffset[0], position[1] - actualOffset[1]) : null
+  const onTarget = position && error < .5 && Math.abs(position[2] - actualOffset[2]) < .5
   const trail = active.length === 3 && state.fitClock
     ? traceClockGuesses(active, Array.from({ length: 41 }, (_, index) => clockGuess(index * 2.5)))
       .map(fit => ({ ...fit, offset: displacement(fit.position) }))
     : []
-  return { sky, ideal, observed, active, result, position, error, onTarget, trail }
+  return { sky, ideal, observed, active, result, position, error, onTarget, trail, actualOffset }
 }
 
 function sampleTrail() {
@@ -108,6 +120,9 @@ function enterLab(heading, animate) {
 function startStory() {
   if (mode === 'lab' && !storyStep) savedSandbox = state
   state = { ...fresh(), offset: 0, enabled: new Set(['s1']) }
+  clockTrial = 0
+  bookmarks = []
+  text('bookmark-note', '')
   storyStep = 'listen'
   enterLab('story-title', true)
   window.scrollTo(0, 0)
@@ -130,6 +145,10 @@ function advanceStory() {
     state.enabled = new Set(firstFour)
   }
   if (previous === 'clock') state.fitClock = true
+  if (previous === 'fix') {
+    state.site = 'shelter'
+    model = buildModel()
+  }
   if (previous === 'fix' || previous === 'trail') toggleSignal('s4')
   else update()
   $('story-title').focus({ preventScroll: true })
@@ -155,8 +174,8 @@ function openDetails() {
   $('inside-title').focus({ preventScroll: true })
 }
 
-function beforeCut() {
-  const prior = solve(model.active, true)
+function beforeCut(observations = model.active) {
+  const prior = solve(observations, true)
   if (prior.status === 'fixed') state.trailCenter = prior.clockUs
   state.probe = 25
   state.fitClock = true
@@ -176,8 +195,7 @@ function toggleSignal(id) {
   } else {
     if (model.trail.length > 1 && model.sample && state.enabled.size === 3) {
       const reading = model.observed[ids.indexOf(id)]
-      const [prediction] = measure([reading], model.sample.position, model.sample.clockUs)
-      state.fourthCheck = { id: id.toUpperCase(), gap: Math.abs(prediction.range - reading.range) }
+      state.fourthCheck = { id: id.toUpperCase(), gap: Math.abs(rangeDifference(reading, model.sample)) }
       state.restored = true
     }
     state.enabled.add(id)
@@ -241,8 +259,9 @@ function indicateClock() {
   $('scene-value').dataset.kind = hasTrail ? 'trail' : model.onTarget ? 'fit' : 'error'
   text('scene-status-label', hasTrail ? 'NO UNIQUE GPS FIX' : 'GPS ESTIMATE')
   text('scene-value', hasTrail ? 'Many places fit.' : fixed ? (model.onTarget ? 'On target.' : integer.format(error) + ' m off') : 'No fix.')
-  text('scene-note', hasTrail && sample
-    ? integer.format(Math.hypot(sample.offset[0], sample.offset[1])) + ' m away · ' + integer.format(Math.abs(sample.offset[2])) + (sample.offset[2] < -.5 ? ' m lower' : ' m higher')
+  const sampleError = sample?.offset.map((value, i) => value - model.actualOffset[i])
+  text('scene-note', hasTrail && sampleError
+    ? integer.format(Math.hypot(sampleError[0], sampleError[1])) + ' m away · ' + (Math.abs(sampleError[2]) < .5 ? 'same height' : integer.format(Math.abs(sampleError[2])) + (sampleError[2] < 0 ? ' m lower' : ' m higher'))
     : fixed ? (model.onTarget ? 'Position and time agree.' : 'Ground distance from the actual phone.') : 'The actual phone is still here.')
   $('estimate-key').hidden = !fixed
   $('trail-key').hidden = !hasTrail
@@ -276,7 +295,7 @@ function renderButtons() {
   ids.forEach((id, index) => {
     const active = state.enabled.has(id)
     const button = switchButtons[index]
-    button.hidden = index > 3 && !active
+    button.hidden = index > 3 && !state.showExtras
     button.setAttribute('aria-pressed', active)
     skyButtons[index].setAttribute('aria-pressed', active)
     skyButtons[index].dataset.active = active
@@ -313,7 +332,9 @@ function renderDetails() {
   $('echo').value = state.echo
   text('echo-value', state.echo + ' m')
   text('echo-result', sixthOn && fixed ? result.rms.toFixed(1) + ' m signal mismatch · ' + integer.format(error) + ' m off on the ground' : '')
+  $('receiver-site').value = state.site
   inspectReading()
+  renderAudit()
 
   $('measurements').innerHTML = observed.map(({ id, range }, i) => {
     const index = active.findIndex(signal => signal.id === id)
@@ -331,21 +352,98 @@ function renderDetails() {
     ).join('')
 }
 
+function loadFieldCase(id) {
+  if (!fieldCases[id]) return
+  const site = state.site
+  state = { ...fresh(), site, fitClock: true }
+  if (id === 'echo') {
+    state.echo = 40
+    state.enabled = new Set(ids)
+    state.showExtras = true
+    $('reading-satellite').value = 's6'
+  } else if (id === 'cluster') {
+    state.layout = 'cluster'
+    state.noise = 10
+  } else if (id === 'roof') {
+    beforeCut(buildModel().active)
+    state.enabled.delete('s4')
+  }
+  $('field-case').value = ''
+  update()
+}
+
+function renderAudit() {
+  $('audit-table').hidden = review?.status !== 'ready'
+  $('undo-omit').hidden = !omittedTrial
+  $('audit-run').disabled = Boolean(omittedTrial)
+  if (!review) {
+    text('audit-result', model.active.length >= 6 ? 'Six readings are available for comparison.' : 'Load six signals to compare what happens when one is removed.')
+    return
+  }
+  if (review.status !== 'ready') {
+    text('audit-result', review.status === 'insufficient' ? 'Six signals are needed so each trial can still check agreement.' : 'This satellite layout could not produce every comparison.')
+    return
+  }
+  const baseline = review.baselineRms.toFixed(2) + ' m'
+  const summary = review.baselineRms < .05 ? 'These readings already agree. Their typical mismatch is ' + baseline + '.' :
+    'With all six, the typical mismatch is ' + baseline + '. Compare the rows below.'
+  text('audit-result', omittedTrial ? 'Trying without ' + omittedTrial.toUpperCase() + '. Position and clock were recalculated from the remaining readings.' : summary)
+  $('audit-rows').innerHTML = review.options.map(({ id, rms, omittedResidual }) =>
+    `<tr><th scope="row">${id.toUpperCase()}</th><td>${rms.toFixed(2)} m</td><td>${signed(omittedResidual, 2)} m</td><td>${omittedTrial === id ? 'Excluded for this trial' : `<button type="button" data-omit="${id}">Try without ${id.toUpperCase()}</button>`}</td></tr>`
+  ).join('')
+}
+
+function renderBookmarks() {
+  const isTrail = storyStep === 'trail'
+  $('bookmark-actions').hidden = !isTrail
+  $('bookmark').hidden = bookmarks.length >= 2
+  $('clear-bookmarks').hidden = bookmarks.length !== 2
+  text('bookmark', bookmarks.length ? 'Save this spot as B' : 'Save this spot as A')
+  $('proof-pair').hidden = (!isTrail && storyStep !== 'arrival') || bookmarks.length === 0
+  const cards = ['proof-a', 'proof-b']
+  cards.forEach((id, index) => {
+    const candidate = bookmarks[index]
+    $(id).hidden = !candidate
+    if (!candidate) return
+    const gap = storyStep === 'arrival' ? Math.abs(rangeDifference(model.observed[3], candidate)) : null
+    const label = gap === null ? signed(candidate.clockUs, 2) + ' µs · 3 of 3 match' :
+      gap < .01 ? 'Matches S4 too' : integer.format(gap) + ' m from S4’s reading'
+    $(id).lastElementChild.textContent = label
+  })
+}
+
 function renderStory() {
   if (!storyStep) return
   const number = storySteps.indexOf(storyStep) + 1
-  const { title, body, action, facts } = storyCard(storyStep, model, state.fourthCheck, integer, signed)
+  const { chapter, title, body, action, facts } = storyCard(storyStep, model, state.fourthCheck, integer, signed)
   $('story-progress').value = number
   text('story-step', number + ' of ' + storySteps.length)
+  text('story-chapter', chapter)
   text('story-title', title)
-  text('story-copy', body)
+  const comparesSavedSpots = storyStep === 'arrival' && bookmarks.length > 0
+  if (comparesSavedSpots) {
+    const winner = bookmarks.findIndex(guess => Math.abs(rangeDifference(model.observed[3], guess)) < .01)
+    text('story-copy', winner === -1
+      ? 'The fourth reading rules out the saved spots. It gives the phone one nearby fix, and now the route can start.'
+      : `Spot ${winner === 0 ? 'A' : 'B'} fits the fourth reading as well. That extra measurement gives the phone one nearby fix, and now the route can start.`)
+  } else text('story-copy', body)
   if ($('story-next').firstChild.textContent.trim() !== action) $('story-next').firstChild.textContent = action + ' '
   $('story-facts').hidden = !facts
   $('story-flight').hidden = storyStep !== 'range'
+  $('story-clock-control').hidden = storyStep !== 'clock'
+  $('story-clock').value = clockTrial
+  text('story-clock-value', clockTrial.toFixed(2) + ' µs')
+  $('clock-evidence').hidden = storyStep !== 'clock'
+  if (storyStep === 'clock') {
+    $('clock-evidence').innerHTML = model.active.map(({ id }, i) => {
+      const residual = model.result.residuals[i]
+      return `<span data-matched="${Math.abs(residual) < .05}">${id.toUpperCase()} <b>${signed(residual)} m</b></span>`
+    }).join('')
+  }
   $('story-probe-control').hidden = storyStep !== 'trail'
   if (facts) {
-    text('story-fact-first', facts[0][0])
-    text('story-label-first', facts[0][1])
+    text('story-fact-first', comparesSavedSpots ? signed(model.result.clockUs, 2) + ' µs' : facts[0][0])
+    text('story-label-first', comparesSavedSpots ? 'Clock error GPS found' : facts[0][1])
     text('story-fact-second', facts[1][0])
     text('story-label-second', facts[1][1])
   }
@@ -354,6 +452,7 @@ function renderStory() {
     $('story-probe').setAttribute('aria-valuetext', signed(model.sample.clockUs, 2) + ' microseconds guessed clock error')
     text('story-probe-value', signed(model.sample.clockUs, 2) + ' µs')
   }
+  renderBookmarks()
   if (storyStep === 'listen' || storyStep === 'range') {
     $('scene-value').dataset.kind = 'trail'
     text('scene-status-label', 'ONE SATELLITE')
@@ -363,7 +462,7 @@ function renderStory() {
 }
 
 function sceneData() {
-  return { ...model, enabled: state.enabled, storyStep, flightAt }
+  return { ...model, enabled: state.enabled, storyStep, flightAt, bookmarks: storyStep ? bookmarks : [] }
 }
 
 function render() {
@@ -377,7 +476,11 @@ function render() {
   else fallback.update(data)
 }
 
-function update() {
+function update({ keepAudit = false } = {}) {
+  if (!keepAudit) {
+    review = null
+    omittedTrial = null
+  }
   model = buildModel()
   sampleTrail()
   render()
@@ -404,10 +507,32 @@ $('view-switch').addEventListener('click', () => {
   else openSandbox()
 })
 $('story-next').addEventListener('click', advanceStory)
+$('story-clock').addEventListener('input', event => {
+  clockTrial = Number(event.currentTarget.value)
+  update()
+})
 $('story-probe').addEventListener('input', event => {
+  text('bookmark-note', '')
   state.probe = Number(event.currentTarget.value)
   sampleTrail()
   render()
+})
+$('bookmark').addEventListener('click', () => {
+  if (bookmarks.length >= 2 || !model.sample) return
+  if (bookmarks.some(candidate => Math.abs(candidate.clockUs - model.sample.clockUs) < .05)) {
+    text('bookmark-note', 'Pick a different spot to compare.')
+    return
+  }
+  bookmarks = [...bookmarks, model.sample]
+  text('bookmark-note', bookmarks.length === 2 ? '' : 'Now choose a different spot.')
+  render()
+  if (bookmarks.length === 2) $('story-next').focus({ preventScroll: true })
+})
+$('clear-bookmarks').addEventListener('click', () => {
+  bookmarks = []
+  text('bookmark-note', '')
+  render()
+  $('bookmark').focus({ preventScroll: true })
 })
 $('replay').addEventListener('click', replay)
 $('brand').addEventListener('click', replay)
@@ -457,6 +582,34 @@ $('assume-clock').addEventListener('click', () => {
   update()
 })
 $('reading-satellite').addEventListener('change', inspectReading)
+$('receiver-site').addEventListener('change', event => {
+  state.site = event.currentTarget.value
+  state.restored = false
+  update()
+})
+$('field-case').addEventListener('change', event => loadFieldCase(event.currentTarget.value))
+$('load-reflection').addEventListener('click', () => loadFieldCase('echo'))
+$('audit-run').addEventListener('click', () => {
+  review = auditSignals(model.active)
+  renderAudit()
+})
+$('audit-rows').addEventListener('click', event => {
+  const id = event.target.closest('button[data-omit]')?.dataset.omit
+  if (!id) return
+  if (omittedTrial) state.enabled.add(omittedTrial)
+  state.enabled.delete(id)
+  state.fitClock = true
+  state.restored = false
+  omittedTrial = id
+  update({ keepAudit: true })
+  $('undo-omit').focus({ preventScroll: true })
+})
+$('undo-omit').addEventListener('click', () => {
+  state.enabled.add(omittedTrial)
+  omittedTrial = null
+  update({ keepAudit: true })
+  $('audit-run').focus({ preventScroll: true })
+})
 document.querySelectorAll('input[name="layout"]').forEach(input => input.addEventListener('change', () => {
   state.layout = input.value
   state.fitClock = true
@@ -474,6 +627,7 @@ $('trial-echo').addEventListener('click', () => {
   if (state.enabled.has('s6') && state.echo > 0) state.echo = 0
   else {
     state.enabled = new Set(ids)
+    state.showExtras = true
     state.fitClock = true
     state.echo = 40
     $('reading-satellite').value = 's6'

@@ -29,7 +29,7 @@
         <section class="intro" aria-labelledby="title">
           <p class="intro-label"><span aria-hidden="true"></span> AN INTERACTIVE GPS EXPERIMENT</p>
           <h1 id="title">Inside the<br><em>blue dot.</em></h1>
-          <p>A friend is waiting at the Gardens. Before your phone can show you the way, it has to find where you’re standing.</p>
+          <p>Maya is waiting under the Supertrees. Your phone puts you on the bridge. You haven’t left the waterfront.</p>
           <button class="enter" id="enter" type="button">Follow the blue dot <span aria-hidden="true">↗</span></button>
         </section>
         <p class="place"><span aria-hidden="true"></span> MARINA BAY, SINGAPORE</p>
@@ -68,10 +68,25 @@
           <div><strong id="story-fact-first"></strong><span id="story-label-first"></span></div>
           <div><strong id="story-fact-second"></strong><span id="story-label-second"></span></div>
         </div>
+        <div class="experiment-control" id="story-clock-control" hidden>
+          <label for="story-clock">Clock correction to try</label><output id="story-clock-value" for="story-clock"></output>
+          <input id="story-clock" type="range" min="0" max="2" step="0.05" value="0" aria-describedby="story-facts">
+          <div class="scale" aria-hidden="true"><span>Subtract no time</span><span>Subtract 2 µs</span></div>
+        </div>
+        <div class="clock-evidence" id="clock-evidence" aria-label="Difference on each reading" hidden></div>
         <div class="experiment-control" id="story-probe-control" hidden>
           <label for="story-probe">Try a point on the trail</label><output id="story-probe-value" for="story-probe"></output>
           <input id="story-probe" type="range" min="0" max="100" step="1" value="25" aria-describedby="story-facts scene-note">
           <div class="scale" aria-hidden="true"><span>Smaller clock guess</span><span>Larger clock guess</span></div>
+        </div>
+        <div class="proof-pair" id="proof-pair" aria-live="polite" hidden>
+          <div id="proof-a" hidden><b>A</b><span></span></div>
+          <div id="proof-b" hidden><b>B</b><span></span></div>
+        </div>
+        <div class="bookmark-actions" id="bookmark-actions" hidden>
+          <button id="bookmark" type="button">Save this spot as A</button>
+          <button id="clear-bookmarks" type="button" hidden>Clear saved spots</button>
+          <span id="bookmark-note" aria-live="polite"></span>
         </div>
         <button class="action" id="story-next" type="button">Catch a signal <span aria-hidden="true">↗</span></button>
       </aside>
@@ -102,6 +117,10 @@
           <div class="sat-switches" id="sat-switches"></div>
         </div>
         <button class="sub-action" id="assume-clock" type="button" hidden>Assume the clock is exact</button>
+        <div class="field-tools">
+          <label for="receiver-site">Place the phone</label><select id="receiver-site"></select>
+          <label for="field-case">Field test</label><select id="field-case"></select>
+        </div>
       </aside>
     </div>
 
@@ -143,6 +162,18 @@
           <p class="card-result" id="echo-result"></p>
         </section>
       </div>
+
+      <section class="investigation card" aria-labelledby="audit-title">
+        <div class="investigation-head">
+          <div><h3 id="audit-title">Which signal is pulling the pin?</h3><p>A reflected signal can be longer than the direct path. Compare the fit when you leave out each of the six readings.</p></div>
+          <div class="investigation-actions"><button id="load-reflection" type="button">Load a reflection</button><button id="audit-run" type="button">Compare all six</button><button id="undo-omit" type="button" hidden>Restore all six</button></div>
+        </div>
+        <p class="card-result" id="audit-result" aria-live="polite"></p>
+        <div class="table-scroll" id="audit-table" role="region" tabindex="0" aria-label="Signal omission comparison" hidden>
+          <table><thead><tr><th scope="col">Signal left out</th><th scope="col">Error across the other readings</th><th scope="col">Mismatch on the omitted reading</th><th scope="col">Experiment</th></tr></thead><tbody id="audit-rows"></tbody></table>
+        </div>
+        <p class="audit-footnote">This comparison asks which single omission makes the remaining readings agree best. Several readings can be wrong in real conditions.</p>
+      </section>
 
       <details class="trace">
         <summary>Show the actual readings and solver updates</summary>

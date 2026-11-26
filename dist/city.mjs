@@ -24,9 +24,9 @@ export function createCity(THREE) {
     const mesh = new THREE.InstancedMesh(geometry, material, instances.length)
     const pose = new THREE.Object3D()
     const shade = new THREE.Color()
-    instances.forEach(([x, y, z, w, h, d, color, yaw = 0], index) => {
+    instances.forEach(([x, y, z, w, h, d, color, yaw = 0, roll = 0], index) => {
       pose.position.set(x, y, z)
-      pose.rotation.set(0, yaw, 0)
+      pose.rotation.set(0, yaw, roll)
       pose.scale.set(w, h, d)
       pose.updateMatrix()
       mesh.setMatrixAt(index, pose.matrix)
@@ -40,8 +40,8 @@ export function createCity(THREE) {
   function box(x, y, z, w, h, d, color, yaw) {
     solidBoxes.push([x, y, z, w, h, d, color, yaw])
   }
-  function light(x, y, z, w, h, d, color, yaw) {
-    luminousBoxes.push([x, y, z, w, h, d, color, yaw])
+  function light(x, y, z, w, h, d, color, yaw, roll) {
+    luminousBoxes.push([x, y, z, w, h, d, color, yaw, roll])
   }
   function addMesh(name, geometry, color, x = 0, y = 0, z = 0) {
     const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({
@@ -144,6 +144,39 @@ export function createCity(THREE) {
     lamp(z < -26 ? 18 : z < -5 ? 8.2 : 6.65, z, -1)
   }
 
+  // A covered link beside the plaza gives the overhead view a street-level reference.
+  const walkway = { x: 5.28, start: -.45, end: 4.6 }
+  const arch = [[-.78, 1.24], [-.64, 1.42], [-.31, 1.55], [0, 1.58],
+    [.31, 1.55], [.64, 1.42], [.78, 1.24]]
+  const roof = new THREE.Shape([...arch, ...arch.slice().reverse().map(([x, y]) => [x, y - .065])]
+    .map(([x, y]) => new THREE.Vector2(x, y)))
+  const walkwayLength = walkway.end - walkway.start
+  const walkwayMiddle = (walkway.end + walkway.start) / 2
+  addMesh('Covered quayside walkway', new THREE.ExtrudeGeometry(roof, {
+    depth: walkwayLength, bevelEnabled: false
+  }), 0x365e76, walkway.x, 0, walkway.start)
+  box(walkway.x, .063, walkwayMiddle, 1.72, .125, walkwayLength + .24, 0x596a76)
+  for (const side of [-1, 1]) {
+    const x = walkway.x + side * .65
+    box(x, 1.34, walkwayMiddle, .055, .055, walkwayLength, 0x7b909f)
+    light(x - side * .10, 1.31, walkwayMiddle, .028, .035, walkwayLength - .18, 0xe8b681)
+    for (let bay = 0; bay < 5; bay++) {
+      const z = walkway.start + .12 + bay * 1.20
+      box(x, .74, z, .057, 1.27, .057, 0x82919b)
+      box(x, .15, z, .18, .16, .18, 0x59677c)
+      light(x, .17, z, .073, .054, .16, 0x94d2d7)
+    }
+  }
+  for (let bay = 0; bay < 7; bay++) {
+    const z = walkway.start + .14 + bay * .79
+    for (let i = 1; i < arch.length; i++) {
+      const [x, y] = arch[i - 1]
+      const [nextX, nextY] = arch[i]
+      light(walkway.x + (x + nextX) / 2, (y + nextY) / 2, z,
+        Math.hypot(nextX - x, nextY - y), .038, .037, 0x657f9a, 0, Math.atan2(nextY - y, nextX - x))
+    }
+  }
+
   const gardenPath = [[6.05, -2.45], [7.8, -5.7], [9.8, -7.1], [13.3, -7.7],
     [15.1, -9.75], [14.8, -12.8], [12.2, -13.6], [10.1, -14.9], [8.8, -16.5]]
   for (let i = 1; i < gardenPath.length; i++) {
@@ -152,6 +185,13 @@ export function createCity(THREE) {
     const b = gardenPath[i]
     strip([a[0] + 0.1, a[1]], [b[0] + 0.1, b[1]], 0.032, 0.132, 0x6eb3c8, true)
   }
+  const arrivalRoute = [[walkway.x, walkway.start - .2], [5.1, -2.05], ...gardenPath.slice(0, 3), [12.35, -7.6]]
+  const [arrivalX, arrivalZ] = arrivalRoute.at(-1)
+  const landing = Array.from({ length: 24 }, (_, i) => {
+    const angle = i * Math.PI / 12
+    return [arrivalX + .94 * Math.cos(angle), arrivalZ + .94 * Math.sin(angle)]
+  })
+  pavement('Garden arrival court', landing, 0x466b75, .128, .026)
 
   const ribs = new THREE.BufferGeometry()
   const ribVertices = []
@@ -400,6 +440,7 @@ export function createCity(THREE) {
 
   return {
     group,
+    arrivalRoute,
     tick(seconds) {
       waterUniforms.clock.value = seconds
     }

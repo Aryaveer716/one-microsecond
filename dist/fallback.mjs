@@ -77,7 +77,7 @@ export function createFallback(canvas) {
       stroke([project([-1000, m, 0]), project([1000, m, 0])], '#2b3e60')
       stroke([project([m, -1000, 0]), project([m, 1000, 0])], '#293653')
     }
-    const actual = project([0, 0, 0])
+    const actual = project(data.actualOffset ?? [0, 0, 0])
     data.sky.forEach((satellite, i) => {
       const singleSignal = data.storyStep === 'listen' || data.storyStep === 'range'
       if ((i >= 4 || singleSignal) && !data.enabled.has(satellite.id)) return
@@ -99,6 +99,12 @@ export function createFallback(canvas) {
       const points = data.trail.map(row => project(row.offset))
       stroke(points, '#788bef53', 9)
       stroke(points, '#a8c1ff', 3)
+      data.bookmarks.forEach((point, index) => {
+        const anchor = project(point.offset)
+        const color = index === 0 ? '#ffca8d' : '#93f0d6'
+        dot(anchor, 6, color)
+        text(index === 0 ? 'A' : 'B', [anchor[0] + 9, anchor[1] - 3], color, 11)
+      })
       dot(project(data.sample.offset), 5, '#fff')
     }
   }

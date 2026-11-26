@@ -5,19 +5,26 @@ const screenHeight = 6.77
 const screenZ = 0.140
 const destination = 'Gardens by the Bay'
 const location = [153, 574]
+const waterfront = [99, 626]
+const bridge = [location, [159, 550], [174, 524], [196, 497], [212, 467], [225, 445],
+  [249, 422], [263, 401], [275, 372], [312, 359]]
 const route = [
-  location, [156, 546], [168, 522], [196, 497], [212, 467], [225, 445],
-  [249, 422], [263, 401], [275, 372], [312, 359], [341, 331]
+  ...bridge, [341, 331]
 ]
+const bridgePath = 'M136 591 ' + bridge.map(point => point.join(' ')).join(' ')
 const routeLength = route.slice(1).reduce(
   (length, point, index) => length + Math.hypot(point[0] - route[index][0], point[1] - route[index][1]), 0
 )
 const rows = ['QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM']
-const typingStart = 0.52
-const typingStep = 0.111
-const keyboardEnd = 2.80
-const routeStart = 3.12
-const routeEnd = 4.78
+const chatExit = 1.74
+const chatFade = 0.30
+const typingStart = 1.98
+const typingStep = 0.090
+const typingEnd = typingStart + typingStep * destination.length
+const keyboardEnd = typingEnd + 0.24
+const routeStart = 3.58
+const entryReadyAt = 4.25
+const routeEnd = 4.64
 const pulseEnd = 11
 
 const limit = a => Math.max(0, Math.min(a, 1))
@@ -91,7 +98,7 @@ function drawNightMap(ctx) {
   ctx.fillStyle = water
   ctx.fillRect(0, 0, canvasWidth, canvasHeight)
 
-  const westernShore = 'M0 0H448V96L414 143 422 188C443 234 420 260 377 274L329 271 289 296 240 283 203 300 158 288 95 302 46 344 58 393 89 420 125 433 142 473 133 504 168 527 205 502 221 528 184 556 181 598 150 643 182 681 244 707 284 749 292 880H0Z'
+  const westernShore = 'M0 0H448V96L414 143 422 188C443 234 420 260 377 274L329 271 289 296 240 283 203 300 158 288 95 302 46 344 58 393 89 420 125 433 142 473 133 504 143 537 133 566 139 591 113 621 150 643 182 681 244 707 284 749 292 880H0Z'
   const easternShore = 'M448 286 409 284 373 293 337 280 310 299 291 325 286 352 271 375 282 397 299 406 299 447 334 466 373 482 394 517 396 545 376 574 335 599 332 628 356 652 389 654 416 683 448 691Z'
   trace(ctx, westernShore, '#282d43', '#495669', 2)
   trace(ctx, easternShore, '#29364b', '#536277', 2)
@@ -161,13 +168,13 @@ function drawNightMap(ctx) {
     'M304 774C342 777 366 799 409 802'
   ]
   for (const line of contour) trace(ctx, line, null, '#334668', 1.25)
-  trace(ctx, 'M196 497 212 467 225 445 249 422 263 401 275 372 312 359', null, '#111c35', 11)
-  trace(ctx, 'M196 497 212 467 225 445 249 422 263 401 275 372 312 359', null, '#607087', 4)
+  trace(ctx, bridgePath, null, '#121e37', 13)
+  trace(ctx, bridgePath, null, '#72839f', 7)
 
   label(ctx, 'DOWNTOWN', 31, 395, 14, '#c0c9dc', 660, true)
   label(ctx, 'BAYFRONT', 240, 278, 13, '#9daec6', 620, true)
-  label(ctx, 'MARINA BAY', 214, 575, 14, '#95b0d4', 530, true)
-  label(ctx, 'PROMENADE', 37, 647, 12, '#a4afc7', 560, true)
+  label(ctx, 'MARINA BAY', 245, 510, 14, '#95b0d4', 530, true)
+  label(ctx, 'PROMENADE', 31, 665, 12, '#a4afc7', 560, true)
   ctx.lineWidth = 1.5
   ctx.strokeStyle = '#96abc7'
   ctx.beginPath()
@@ -191,17 +198,51 @@ function drawStatus(ctx) {
   box(ctx, 425, 38, 2, 5, 1, '#c9d4ed')
 }
 
-function drawMeetup(ctx, time) {
-  const opacity = 1 - ease((time - 1.18) / .36)
-  if (!opacity) return
+function drawChat(ctx, time, opacity) {
   ctx.save()
   ctx.globalAlpha = opacity
-  box(ctx, 26, 177, 396, 72, 14, '#23344d', '#698db9')
-  circle(ctx, 61, 213, 17, '#95b8f4')
-  label(ctx, 'M', 54, 219, 17, '#122743', 750)
-  label(ctx, 'Maya', 91, 207, 16, '#c6dbfc', 680)
-  label(ctx, 'I’m at the Gardens!', 91, 229, 19, '#f3f8ff', 630)
+  const background = ctx.createLinearGradient(0, 0, 430, 880)
+  background.addColorStop(0, '#15233a')
+  background.addColorStop(0.55, '#111b31')
+  background.addColorStop(1, '#0d1526')
+  ctx.fillStyle = background
+  ctx.fillRect(0, 0, canvasWidth, canvasHeight)
+  drawStatus(ctx)
+
+  circle(ctx, 60, 127, 28, '#eac4a0')
+  label(ctx, 'M', 47, 137, 27, '#2b2234', 750)
+  label(ctx, 'Maya', 101, 138, 39, '#f4f7ff', 690)
+  trace(ctx, 'M28 179H420', null, '#394964', 1.5)
+
+  box(ctx, 27, 217, 324, 119, [22, 22, 22, 5], '#283c5b', '#4c6590')
+  label(ctx, 'I’m under the', 47, 264, 33, '#eef5ff', 610)
+  label(ctx, 'Supertrees.', 47, 304, 33, '#eef5ff', 610)
+  box(ctx, 27, 350, 375, 71, [22, 22, 22, 5], '#283c5b', '#4c6590')
+  label(ctx, 'Are you on the bridge?', 47, 396, 31, '#eef5ff', 610)
+
+  const reply = ease((time - .43) / .20)
+  if (reply > 0) {
+    ctx.globalAlpha = opacity * reply
+    box(ctx, 110, 452, 311, 70, [22, 22, 5, 22], '#a9c9fa')
+    label(ctx, 'Still by the water.', 130, 497, 30, '#182f53', 670)
+  }
+
+  ctx.globalAlpha = opacity
+  box(ctx, 26, 670, 396, 119, 19, '#1d2a43', '#4e688d')
+  box(ctx, 43, 693, 70, 70, 14, '#314968')
+  trace(ctx, 'M60 743 87 712 95 731 80 733 76 749Z', '#bee0ff')
+  label(ctx, 'WALKING ROUTE', 129, 725, 17, '#a9bdda', 640, true)
+  label(ctx, destination, 129, 751, 24, '#f0f5ff', 650)
+  box(ctx, 173, 852, 102, 5, 2.5, '#d9e4f9')
   ctx.restore()
+}
+
+function drawMayaQuestion(ctx) {
+  box(ctx, 25, 178, 398, 66, 15, '#202e47', '#536c90')
+  circle(ctx, 59, 211, 17, '#eac4a0')
+  label(ctx, 'M', 51, 218, 18, '#2b2234', 750)
+  label(ctx, 'Maya', 87, 205, 15, '#dbc6ac', 700)
+  label(ctx, 'Are you on the bridge?', 87, 228, 23, '#edf4ff', 640)
 }
 
 function drawSearch(ctx, text, isTyping, isReady, time) {
@@ -234,6 +275,7 @@ function drawSearch(ctx, text, isTyping, isReady, time) {
 
 function drawRoute(ctx, progress, time, reducedMotion) {
   const [x, y] = location
+  ctx.save()
   if (progress > 0) {
     ctx.beginPath()
     ctx.moveTo(x, y)
@@ -267,30 +309,51 @@ function drawRoute(ctx, progress, time, reducedMotion) {
     trace(ctx, `M${endX} ${endY + 4}q-13 -12 -13 -22a13 13 0 0 1 26 0q0 10 -13 22Z`, '#e9f9ff', '#101b31', 2)
     circle(ctx, endX, endY - 18, 4.7, '#4a77b9')
   }
-  const pulse = reducedMotion ? 0 : ((time - routeStart) / 1.5) % 1
-  if (progress > 0 && !reducedMotion && time < pulseEnd) {
-    circle(ctx, x, y, 17 + pulse * 36, `rgba(103, 169, 255, ${(1 - pulse) * 0.19})`, `rgba(156, 204, 255, ${(1 - pulse) * 0.57})`)
+  if (time >= entryReadyAt) drawDiscrepancy(ctx)
+  const pulse = ((time - entryReadyAt) / 1.4) % 1
+  ctx.lineWidth = 1.5
+  if (!reducedMotion && time >= entryReadyAt && time < pulseEnd) {
+    circle(ctx, x, y, 19 + pulse * 34, `rgba(103, 169, 255, ${(1 - pulse) * 0.21})`, `rgba(156, 204, 255, ${(1 - pulse) * 0.64})`)
   }
   circle(ctx, x, y, 22, 'rgba(99, 168, 255, .21)', 'rgba(154, 201, 255, .42)')
-  circle(ctx, x, y, 13, '#507fff', '#eff9ff')
   ctx.lineWidth = 2.35
-  ctx.strokeStyle = '#eff9ff'
-  ctx.stroke()
+  circle(ctx, x, y, 13, '#507fff', '#eff9ff')
   circle(ctx, x, y, 4, '#a5d5ff')
+  ctx.restore()
 }
 
-function drawTrip(ctx, progress) {
+function drawDiscrepancy(ctx) {
+  const [x, y] = location
+  const [groundX, groundY] = waterfront
+  ctx.setLineDash([3, 5])
+  trace(ctx, `M${groundX} ${groundY} ${x} ${y}`, null, '#a6d7d9', 2)
+  ctx.setLineDash([])
+  circle(ctx, groundX, groundY, 12, '#243c46', '#acf3d9')
+  circle(ctx, groundX, groundY, 4.5, '#bcffe5')
+  trace(ctx, `M${x + 19} ${y}h19`, null, '#75aaff', 1.5)
+  box(ctx, x + 38, y - 17, 152, 34, 7, '#182b4c', '#5d8cd3')
+  label(ctx, 'GPS · BRIDGE', x + 50, y + 6, 17, '#c2deff', 720, true)
+  box(ctx, groundX + 18, groundY - 17, 207, 34, 7, '#192f3e', '#628b91')
+  label(ctx, 'YOU · WATERFRONT', groundX + 29, groundY + 6, 17, '#c5f4e7', 720, true)
+}
+
+function drawTrip(ctx, time, progress) {
   const fade = ctx.createLinearGradient(0, 710, 0, 880)
   fade.addColorStop(0, 'rgba(12, 20, 38, 0)')
   fade.addColorStop(1, '#0a1023')
   ctx.fillStyle = fade
   ctx.fillRect(0, 710, canvasWidth, 170)
-  box(ctx, 23, 737, 402, 91, 20, '#171f36', '#4b5e7c')
-  if (progress > 0) {
-    label(ctx, progress === 1 ? '12 min' : 'Finding route…', 44, 777, 26, '#edf5ff', 690)
-    label(ctx, progress === 1 ? 'WALK  ·  0.8 KM' : 'WALKING DIRECTIONS', 44, 803, 13, '#aabcda', 570, true)
-    circle(ctx, 382, 781, 23, progress === 1 ? '#a2ceff' : '#344462')
-    trace(ctx, 'M369 781 390 770 387 792 381 782Z', progress === 1 ? '#173664' : '#a6bbd8')
+  const canInspect = time >= entryReadyAt
+  box(ctx, 23, 732, 402, 96, 20, canInspect ? '#24385d' : '#171f36', canInspect ? '#8cb4f2' : '#4b5e7c')
+  if (canInspect) {
+    label(ctx, 'Your location looks off.', 43, 772, 27, '#f1f6ff', 700)
+    label(ctx, 'Inspect the blue dot', 43, 803, 23, '#b6d6ff', 650)
+    trace(ctx, 'M363 781h26m-10 -10 10 10 -10 10', null, '#c9e5ff', 3)
+  } else if (progress > 0) {
+    label(ctx, 'Finding route…', 44, 777, 26, '#edf5ff', 690)
+    label(ctx, 'WALKING DIRECTIONS', 44, 803, 13, '#aabcda', 570, true)
+    circle(ctx, 382, 781, 23, '#344462')
+    trace(ctx, 'M369 781 390 770 387 792 381 782Z', '#a6bbd8')
   } else {
     label(ctx, 'Marina Bay', 44, 777, 25, '#edf5ff', 690)
     label(ctx, 'SINGAPORE', 44, 803, 13, '#aabcda', 570, true)
@@ -396,12 +459,12 @@ function createTypingHand(THREE, group) {
   const thumbEnd = new THREE.Vector3()
 
   function pose(time, keyIndex, reducedMotion) {
-    const visibility = ease((time - 0.22) / 0.35) * (1 - ease((time - 2.45) / 0.42))
+    const visibility = ease((time - typingStart + .18) / .23) * (1 - ease((time - typingEnd + .10) / .32))
     hand.visible = !reducedMotion && visibility > 0
     if (!hand.visible) return
 
     const from = keyCenter(destination[Math.max(0, keyIndex - 1)] || ' ')
-    const to = keyCenter(destination[keyIndex] || ' ')
+    const to = keyCenter(destination[keyIndex] ?? 'Route')
     const phase = limit((time - typingStart) / typingStep - keyIndex)
     const move = ease(phase * 2.1)
     const tap = Math.sin(Math.PI * phase) ** 2
@@ -503,20 +566,24 @@ export function createPhone(THREE) {
     if (frame === previousFrame && reducedMotion === previousReducedMotion) return
     previousFrame = frame
     previousReducedMotion = reducedMotion
-    const typing = time >= typingStart - 0.17 && time < typingStart + typingStep * destination.length
-    const count = Math.floor((time - typingStart) / typingStep + 1)
+    const typing = time >= typingStart - 0.17 && time < typingEnd
+    const count = Math.floor((time - typingStart) / typingStep + .52)
     const query = destination.slice(0, Math.max(0, count))
     const progress = ease((time - routeStart) / (routeEnd - routeStart))
-    ctx.drawImage(map, 0, 0)
-    drawRoute(ctx, progress, time, reducedMotion)
-    drawSearch(ctx, query, typing, progress === 1, time)
-    drawMeetup(ctx, time)
-    drawTrip(ctx, progress)
-    const keyboard = ease((time - 0.25) / 0.3) * (1 - ease((time - 2.47) / (keyboardEnd - 2.47)))
-    if (keyboard > 0) drawKeyboard(ctx, count > 0 ? destination[count - 1] : null, keyboard)
+    if (time >= chatExit) {
+      ctx.drawImage(map, 0, 0)
+      drawRoute(ctx, progress, time, reducedMotion)
+      drawSearch(ctx, query, typing, progress === 1, time)
+      drawMayaQuestion(ctx)
+      drawTrip(ctx, time, progress)
+      const keyboard = ease((time - chatExit) / .24) * (1 - ease((time - typingEnd) / (keyboardEnd - typingEnd)))
+      if (keyboard > 0) drawKeyboard(ctx, count > 0 ? destination[count - 1] : null, keyboard)
+    }
+    const chatOpacity = 1 - ease((time - chatExit) / chatFade)
+    if (chatOpacity > 0) drawChat(ctx, time, chatOpacity)
     texture.needsUpdate = true
   }
 
   tick(0)
-  return { group, tick, screenPoint: screenPosition(...location, screenZ + 0.002) }
+  return { group, tick, screenPoint: screenPosition(...location, screenZ + 0.002), entryReadyAt }
 }

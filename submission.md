@@ -1,6 +1,6 @@
 # Inside the Blue Dot
 
-[Live experiment](https://aryaveer716.github.io/one-microsecond/) · [Public source](https://github.com/Aryaveer716/one-microsecond) · [Demo video](https://github.com/Aryaveer716/one-microsecond/releases/download/guided-blue-dot/inside-the-blue-dot.mp4)
+[Live experiment](https://aryaveer716.github.io/one-microsecond/) · [Public source](https://github.com/Aryaveer716/one-microsecond) · [Demo video](https://github.com/Aryaveer716/one-microsecond/releases/download/field-guide/inside-the-blue-dot.mp4)
 
 ## Round 1 project page
 
@@ -14,7 +14,7 @@ JavaScript, HTML, CSS, Three.js for 3D rendering and Canvas for fallback. The GP
 
 **What your project is about**
 
-A friend is waiting at Gardens by the Bay. Before the route can start, your phone has to find you. Fly through the blue dot, catch a satellite signal, and see its time become a distance. Speed up the clock and watch the pin move. Then take away one satellite. Pick two points on the resulting trail and see how both fit the same three signals. Restore the fourth to test your guess, then explore freely in the sandbox.
+Maya thinks you’re on the bridge. You’re still by the water. Fly through the phone’s screen, catch a signal, and turn its travel time into distance. Tune the phone’s clock until four readings agree. Then take a covered walk and save two places that fit the same three signals. The fourth tests both guesses. In the sandbox you can move the phone, change the sky, or investigate a signal reflected off a building.
 
 **Who is it for?**
 
@@ -26,7 +26,7 @@ Pull apart a GPS fix and see why three signals leave a trail of possibilities.
 
 **How it works**
 
-The app simulates straight-line distances and adds one shared receiver clock error to the satellite readings. Its iterative least-squares solver receives only satellite coordinates and apparent distances. With four independent signals it can fit east, north, height and clock error together. With three, we try a range of clock guesses and solve three distances at each guess. The 3D trail plots those computed candidates, and the fourth reading tests the selected candidate directly. The scene uses synthetic locations and compressed distances. All calculations run in the browser.
+The simulator produces ranges from satellite coordinates, phone position and a shared receiver clock error. An iterative least-squares solver receives just the satellite positions and measured ranges. With four readings it can estimate east, north, height and clock error. With three, it tries a range of clock guesses and plots a nearby position for each. Restoring the fourth tests your saved positions. In the reflection case it refits the position six times, leaving out each reading in turn. The 3D city is synthetic and the display compresses heights and orbital distances. The receiver runs in the browser.
 
 **Why it matters**
 
@@ -38,7 +38,7 @@ GPS has to work out what time it is while figuring out where you are. A milliont
 - Pick two points on the trail. Explain what changes and what stays the same. Predict which reading will differ when you restore the missing satellite.
 - Trace one number from signal time through apparent distance through measured-minus-predicted residual.
 - Explain what Four signals means in this model. Count the unknowns and describe why the measurements still need independent geometry.
-- Explain how a fit can have almost zero residual even when the phone estimate is wrong. Try the 40 m echo with six signals and then remove two.
+- Load the 40 m echo case. Explain why omitting S6 recovers the position, and why another omission can fit the remaining measurements closely while moving the estimated pin.
 - Explain the model’s limits and the reasons for using Three.js. Use your own words and describe each team member’s contributions and AI assistance accurately.
 
 ## First-view test

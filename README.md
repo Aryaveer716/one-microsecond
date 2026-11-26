@@ -1,16 +1,15 @@
 # Inside the Blue Dot
 
-[Open the live experiment](https://aryaveer716.github.io/one-microsecond/) · [Round 1 project page](submission.md) · [Demo video](https://github.com/Aryaveer716/one-microsecond/releases/download/guided-blue-dot/inside-the-blue-dot.mp4)
+[Open the live experiment](https://aryaveer716.github.io/one-microsecond/) · [Round 1 project page](submission.md) · [Demo video](https://github.com/Aryaveer716/one-microsecond/releases/download/field-guide/inside-the-blue-dot.mp4)
 
-A friend is waiting at Gardens by the Bay. Before your phone can tell you how to get there, it has to find your starting point. Follow its blue dot into a 3D waterfront and take it one signal at a time.
+Maya is waiting under the Supertrees. She asks if you’re on the bridge, but you’re still at the waterfront. Follow the blue dot into a simulated GPS receiver and see what went wrong.
 
-1. **Catch a signal.** Read a computed flight time and see how it becomes a distance.
-2. **Make the clock run fast.** One microsecond adds about 300 metres to each apparent distance and moves the horizontal fix about 163 metres in the opening setup.
-3. **Find the right fix.** GPS estimates position and clock error together.
-4. **Take one signal away.** Pick two points on the trail. Three readings can agree with different locations and clock errors.
-5. **Restore the fourth signal.** See how far that reading disagreed with your chosen guess. The trail converges to one local fix.
+1. **Catch a signal.** The scene follows a transmitted time stamp, shows the measured flight time, and turns it into a distance.
+2. **Check the phone’s clock.** Try subtracting time from all four readings. Watch the four discrepancies and the pin move together. A one-microsecond error adds about 300 metres to each range and moves the horizontal fix about 163 metres in this setup.
+3. **Take the covered walk.** The simulated phone moves and one measurement is removed. Three readings now fit different places with different clock guesses. Save two points on the actual computed trail.
+4. **Restore the fourth signal.** Each saved point is compared against the fourth measurement. The camera follows the recovered fix down to the walk toward the Gardens.
 
-**Open sandbox** skips the story. After the story you can continue there with the restored fix or return to a sandbox you already opened. **How GPS works** opens the individual readings, solver updates, and experiments with crowded satellite geometry and a reflected path.
+**Open sandbox** skips the story. You can move the phone between four places, adjust the clock, switch signals, or load field cases for a clear view, a blocked signal, a crowded sky or a reflection. **How GPS works** opens individual readings, solver updates and experiments in measurement consistency.
 
 ## What the receiver computes
 
@@ -28,11 +27,17 @@ The experiment can force the clock to be exact, or it can estimate the clock alo
 
 With the clock unknown and only three readings, the experiment tries 41 clock guesses around the previous clock estimate. For each one it subtracts that common clock distance from the same three readings and solves for a nearby 3D position. It draws those computed positions. The sweep covers a finite window of one nearby branch, with a slider that computes a fresh fit for the selected guess. The additional observation is compared against the selected guess before the restored solver runs with all four ranges.
 
-Horizontal dilution of precision (HDOP) comes from the least-squares geometry. The noise-slider trial uses identical, repeatable signed range perturbations in both skies. The echo trial delays S6 and lets you clear that delay while keeping all six satellite positions and measurements besides that path fixed. The RMS residual shows how well the solution agrees with the readings. Enough observations can reveal inconsistency, but an exact fit with four readings can still be biased.
+## Try a reflection
+
+A bad reading can creep into an apparently plausible fix. Load the reflection case to add 40 m to S6 while all six readings are active. **Compare all six** solves again six times, leaving out a different satellite each time. It compares the remaining readings’ RMS discrepancy and reports the omitted reading’s own difference from that fit.
+
+Try omitting S6 in the open-sky fixture. The other readings can agree and the phone returns to the simulated location. The held-out range differs by 40 m. In the same fixture, omitting another satellite can also produce a small remaining mismatch while shifting the fix. This is evidence about what changes when one reading is removed. Real receivers use additional assumptions and integrity checks.
+
+The noise slider applies identical signed perturbations in both views of the sky. Horizontal dilution of precision (HDOP) is computed from the local fit geometry. It describes typical horizontal uncertainty per metre of independent, equal-variance range noise.
 
 ## Model and scene
 
-The skyline, route, and satellite layouts are synthetic. The city and phone are procedural 3D assets. Orbital distances and the height axis are compressed for display. The physics uses the uncompressed coordinates. The model omits atmosphere, satellite-clock corrections, Earth rotation during signal flight, signal acquisition, and actual location access. The opening route is staged.
+The skyline, route, and satellite layouts are synthetic. The city and phone are procedural 3D assets. Orbital distances and the height axis are compressed for display. The physics uses the uncompressed coordinates. The model omits atmosphere, satellite-clock corrections, Earth rotation during signal flight, signal acquisition, and actual location access. The fictional chat, opening map and final walking route are staged. The roof is modeled by relocating the simulated phone and removing one signal. The position and timing computations use measured ranges only.
 
 The project runs on GitHub Pages. The renderer, font, and all assets are hosted alongside the app. The browser computes the same interaction in Canvas when WebGL 2 is unavailable. Reduced-motion mode opens with the completed route and skips the camera flight.
 
@@ -51,7 +56,9 @@ Open `http://localhost:8661` after starting the server. Run the tests in another
 | --- | --- |
 | `dist/gps.mjs` | Sky geometry, signal observations, solver and ambiguity trail |
 | `dist/app.mjs` | Inputs, experiment state, story navigation, readouts and timing inspector |
-| `dist/story.mjs` | Guided copy and live readouts derived from the receiver state |
+| `dist/story.mjs` | Guided chapters, live readouts and exact checks of saved guesses |
+| `dist/field.mjs` | Locations and named field tests |
+| `dist/audit.mjs` | Leave-one-out measurement consistency comparison |
 | `dist/scene.mjs` | WebGL camera, signal animation, markers and trail picking |
 | `dist/city.mjs`, `dist/phone.mjs` | Procedural waterfront and navigational phone |
 | `dist/fallback.mjs` | Interactive Canvas projection |
